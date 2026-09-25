@@ -5,6 +5,7 @@ import { useState, type RefObject } from "react";
 import { candidateOf, isAutoApplied, isSuppressed, needsEditor, type FindingState, type ReviewState, type ReviewSummary } from "@/lib/review";
 import { SECTIONS } from "@/lib/manuscript";
 import { FindingCard, type CardActions } from "./FindingCard";
+import type { AiStatus } from "./Assist";
 
 export type Filter = "all" | "needs" | "auto";
 
@@ -30,6 +31,7 @@ interface Props {
   canStart: boolean;
   onPointerInside: (inside: boolean) => void;
   onRetryFailed: () => void;
+  ai: AiStatus | null;
 }
 
 export function ReviewPanel(p: Props) {
@@ -169,6 +171,8 @@ export function ReviewPanel(p: Props) {
                         finding={f}
                         candidate={candidateOf(f.id)}
                         blockText={block?.text ?? null}
+                        figures={state.figures}
+                        ai={p.ai}
                         selected={p.selectedId === f.id}
                         dim={dim}
                         active={p.activeId === f.id && !dim}
@@ -201,6 +205,8 @@ export function ReviewPanel(p: Props) {
                         finding={f}
                         candidate={candidateOf(f.id)}
                         blockText={f.anchor ? state.doc.blocks[f.anchor.blockId].text : null}
+                        figures={state.figures}
+                        ai={p.ai}
                         selected={p.selectedId === f.id}
                         onToggle={p.onToggleCard}
                         actions={p.actions}

@@ -5,7 +5,7 @@
  * Manuscript text travels inside `state` as quoted data; the questions carry
  * the only instructions.
  */
-import type { Candidate } from "../candidates";
+import { kindOf, type Candidate } from "../candidates";
 import { STYLE_PROFILE } from "../style-profile";
 
 export interface PayloadContext {
@@ -15,6 +15,7 @@ export interface PayloadContext {
   precedingText: string | null;
   followingText: string | null;
   related: { label: string; text: string }[];
+  figure?: Record<string, unknown>;
 }
 
 const clip = (s: string | null, n: number) => (s === null ? null : s.length > n ? `${s.slice(0, n)}…` : s);
@@ -28,14 +29,14 @@ export const ROUTE_CRITERIA = {
 } as const;
 
 export function buildOpenJevPayload(candidate: Candidate, ctx: PayloadContext, model: string) {
+  const kind = kindOf(candidate);
   const start = ctx.anchorStart;
   const end = start + candidate.original.length;
+  // Figure findings concern the graphic, so there is no text span to mark.
   const marked =
-    ctx.blockText.slice(Math.max(0, start - 160), start) +
-    "⟦" +
-    ctx.blockText.slice(start, end) +
-    "⟧" +
-    ctx.blockText.slice(end, end + 160);
+    kind === "figure"
+      ? `Figure caption: ${ctx.blockText}`
+      : ctx.blockText.slice(Math.max(0, start - 160), start) + "⟦" + ctx.blockText.slice(start, end) + "⟧" + ctx.blockText.slice(end, end + 160);
 
   // Most important first: models with a short input window may truncate the
   // end of the state, which should only ever cost surrounding context.
@@ -47,7 +48,11 @@ export function buildOpenJevPayload(candidate: Candidate, ctx: PayloadContext, m
       replacement_text: candidate.replacement,
       target_in_context: marked,
       finding_type: candidate.category.replace(/_/g, " "),
+      change_kind:
+        kind === "figure" ? "correction to a figure graphic" : kind === "structure" ? "XML tagging only; the wording does not change" : "text edit",
       finding_description: `${candidate.label}. ${candidate.explanation}`,
+      ...(candidate.evidence ? { evidence: candidate.evidence } : {}),
+      ...(kind === "figure" && ctx.figure ? { figure: ctx.figure } : {}),
     },
     style_profile: { name: STYLE_PROFILE.name, rules: STYLE_PROFILE.rules },
     manuscript: {

@@ -2,13 +2,17 @@
 
 import { Pencil } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { kindOf } from "@/lib/candidates";
 import type { Block, DocState } from "@/lib/document";
+import type { FigureSpec, FigureState } from "@/lib/figures";
 import { MANUSCRIPT_META } from "@/lib/manuscript";
-import { highlightKind } from "@/lib/present";
-import type { FindingState } from "@/lib/review";
+import { highlightKind, statusLabel, TONE_DOT } from "@/lib/present";
+import { candidateOf, type FindingState } from "@/lib/review";
+import { FigureGraphic, REGION_CROP } from "./FigureView";
 
 interface ManuscriptProps {
   doc: DocState;
+  figures: FigureState;
   findingsByBlock: Record<string, FindingState[]>;
   selectedId: string | null;
   /** The finding nearest the reading line, mirrored in the panel. */
@@ -47,6 +51,7 @@ export function Manuscript(props: ManuscriptProps) {
           <BlockView
             key={id}
             block={doc.blocks[id]}
+            figure={doc.blocks[id].figureId ? props.figures[doc.blocks[id].figureId!] : undefined}
             findings={findingsByBlock[id]}
             selectedId={props.selectedId}
             activeId={props.activeId}
@@ -69,6 +74,7 @@ export function Manuscript(props: ManuscriptProps) {
 
 interface BlockViewProps {
   block: Block;
+  figure?: FigureSpec;
   findings: FindingState[] | undefined;
   selectedId: string | null;
   activeId: string | null;
@@ -80,8 +86,11 @@ interface BlockViewProps {
   onCancelEdit: () => void;
 }
 
-const BlockView = memo(function BlockView({ block, findings, selectedId, activeId, flashId, editing, onSelect, onStartEdit, onSaveEdit, onCancelEdit }: BlockViewProps) {
+const BlockView = memo(function BlockView({ block, figure, findings, selectedId, activeId, flashId, editing, onSelect, onStartEdit, onSaveEdit, onCancelEdit }: BlockViewProps) {
+  // Figure findings are pinned on the graphic; everything else highlights text.
+  const figureFindings = (findings ?? []).filter((f) => kindOf(candidateOf(f.id)) === "figure");
   const marks = (findings ?? [])
+    .filter((f) => kindOf(candidateOf(f.id)) !== "figure")
     .map((f) => ({ f, kind: highlightKind(f) }))
     .filter((m) => m.kind !== null && m.f.anchor)
     .sort((a, b) => a.f.anchor!.start - b.f.anchor!.start);
@@ -116,11 +125,11 @@ const BlockView = memo(function BlockView({ block, findings, selectedId, activeI
 
   const manualCount = marks.filter((m) => m.kind === "manual").length;
   const suggestCount = marks.filter((m) => m.kind === "suggest").length;
-  const editable = block.kind === "paragraph" || block.kind === "subheading";
+  const editable = block.kind === "paragraph" || block.kind === "subheading" || block.kind === "figure" || block.kind === "reference";
 
   if (editing) {
     return (
-      <div data-block-id={block.id} className={block.kind === "paragraph" ? "mb-[1.05em]" : "mb-3 mt-9"}>
+      <div data-block-id={block.id} className={block.kind === "subheading" ? "mb-3 mt-9" : "mb-[1.05em]"}>
         <BlockEditor block={block} editing={editing} onSave={onSaveEdit} onCancel={onCancelEdit} />
       </div>
     );
@@ -131,6 +140,28 @@ const BlockView = memo(function BlockView({ block, findings, selectedId, activeI
       <h2 className="mb-4 mt-12 font-serif text-[22px] font-semibold tracking-[-0.005em] text-ink first:mt-0">{nodes}</h2>
     ) : block.kind === "subheading" ? (
       <h3 className="mb-2.5 mt-8 font-serif text-[18.5px] font-semibold italic text-ink">{nodes}</h3>
+    ) : block.kind === "figure" && figure ? (
+      <figure className="my-9">
+        <div className="relative overflow-hidden rounded-[3px] border border-line-soft bg-paper">
+          <FigureGraphic spec={figure} className="block h-auto w-full" />
+          {figureFindings.map((f) => (
+            <RegionOutline key={f.id} finding={f} figure={figure} on={f.id === selectedId || f.id === activeId} />
+          ))}
+        </div>
+        {figureFindings.some((f) => highlightKind(f)) && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 font-sans">
+            <span className="mr-0.5 text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Figure checks</span>
+            {figureFindings.map((f) => (
+              <FigureChip key={f.id} finding={f} selected={f.id === selectedId} active={f.id === activeId} flash={f.id === flashId} onSelect={onSelect} />
+            ))}
+          </div>
+        )}
+        <figcaption className="mt-3 font-sans text-[14px] leading-relaxed text-ink-2">
+          <span className="font-semibold text-ink">{figure.label}.</span> {nodes}
+        </figcaption>
+      </figure>
+    ) : block.kind === "reference" ? (
+      <p className="mb-3 pl-6 -indent-6 text-[16px] leading-[1.6] text-ink">{nodes}</p>
     ) : (
       <p className="mb-[1.05em]">{nodes}</p>
     );
@@ -162,6 +193,45 @@ const BlockView = memo(function BlockView({ block, findings, selectedId, activeI
     </div>
   );
 });
+
+/** A figure finding, as a quiet chip under the graphic. */
+function FigureChip({ finding: f, selected, active, flash, onSelect }: { finding: FindingState; selected: boolean; active: boolean; flash: boolean; onSelect: (id: string) => void }) {
+  const c = candidateOf(f.id);
+  const kind = highlightKind(f);
+  if (!kind) return null;
+  const status = statusLabel(f);
+  return (
+    <button
+      type="button"
+      data-finding-id={f.id}
+      onClick={() => onSelect(f.id)}
+      title={`${c.label} — ${status.text}`}
+      className={`fig-pin inline-flex h-[24px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[11.5px] ${
+        selected ? "border-olive bg-olive-wash text-ink ring-2 ring-olive-pale" : active ? "border-olive-soft bg-paper text-ink" : "border-line bg-paper text-ink-2 hover:border-olive-soft hover:text-ink"
+      } ${flash ? "hl-flash" : ""}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[status.tone]}`} />
+      {c.label}
+    </button>
+  );
+}
+
+/** Dashed frame around the region of the graphic a finding concerns. */
+function RegionOutline({ finding: f, figure, on }: { finding: FindingState; figure: FigureSpec; on: boolean }) {
+  const c = candidateOf(f.id);
+  const box = c.figure ? REGION_CROP[figure.kind][c.figure.region] : undefined;
+  if (!box || !highlightKind(f)) return null;
+  const [x, y, w, h] = box.split(" ").map(Number);
+  const [W, H] = figure.kind === "map" ? [560, 360] : [560, 380];
+  const full = w >= W && h >= H;
+  return (
+    <span
+      aria-hidden
+      className={`region-outline pointer-events-none absolute rounded-[4px] border-[1.5px] border-dashed border-olive ${on ? "opacity-100" : "opacity-0"}`}
+      style={{ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`, width: `${(w / W) * 100}%`, height: `${(h / H) * 100}%`, inset: full ? "6px" : undefined }}
+    />
+  );
+}
 
 function BlockEditor({
   block,

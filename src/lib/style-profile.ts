@@ -13,6 +13,12 @@ export const STYLE_PROFILE = {
     "Preserve technical terminology exactly as the authors define it.",
     "Preserve the author's meaning.",
     "Do not strengthen scientific claims beyond what the evidence supports.",
+    "Define abbreviations at first use in the main text, even if defined in the abstract.",
+    "Use neutral, person-first language (e.g. 'older adults', not 'the elderly').",
+    "Report completed work in the past tense in Methods and Results.",
+    "Every citation must match a reference-list entry, and every reference must be cited. Page ranges take an en dash.",
+    "Figures: colour-blind-safe palettes; text at least 7 pt at print size; raster images at least 300 dpi at print size; every figure needs alt text.",
+    "Structure: output JATS 1.3 XML; cross-references to figures and references are tagged as <xref>.",
   ],
   /**
    * Terms and names that automatic editing must never alter.

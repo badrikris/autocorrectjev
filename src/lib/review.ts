@@ -7,7 +7,9 @@
  *    the request (editEpoch) and it answers the latest request for that finding (attempt).
  *  - Every automatic edit keeps what is needed to undo it.
  */
-import { CANDIDATES, type Candidate } from "./candidates";
+import { CANDIDATES, kindOf, type Candidate } from "./candidates";
+import { FIGURES, patchFigure, type FigureState } from "./figures";
+import { BLOCKS } from "./manuscript";
 import {
   applyExactEdit,
   applyManualBlockEdit,
@@ -22,6 +24,7 @@ import {
 } from "./document";
 import type { OpenJevError, OpenJevTechnical } from "./openjev/types";
 import { routeFinding, type OpenJevDecision, type PolicyOutcome, type Route } from "./policy";
+import { detectProtectedChanges, type ProtectedHit } from "./protected";
 
 export type EvalStatus = "idle" | "waiting" | "evaluating" | "evaluated" | "failed" | "stale";
 export type Resolution =
@@ -63,6 +66,8 @@ export interface FindingState {
 
 export interface ReviewState {
   doc: DocState;
+  /** Figure specifications; figure findings patch these. */
+  figures: FigureState;
   findings: Record<string, FindingState>;
   mode: ReviewMode;
   /** True only after at least one successful live OpenJEV response. */
@@ -81,6 +86,8 @@ export type ReviewAction =
   | { type: "keep"; id: string }
   | { type: "undo"; id: string }
   | { type: "apply"; id: string; text?: string }
+  /** The editor chooses their own wording for a judgment item (e.g. one of the offered rewrites). */
+  | { type: "applyEditorText"; id: string; text: string }
   | { type: "dismiss"; id: string }
   | { type: "markReviewed"; id: string }
   | { type: "saveQuery"; id: string; text: string }
@@ -99,6 +106,20 @@ export function createReviewState(candidates: Candidate[] = CANDIDATES, doc: Doc
   const blockIndex = new Map(doc.order.map((id, i) => [id, i]));
   for (const c of candidates) {
     const block = doc.blocks[c.blockId];
+    if (kindOf(c) === "figure") {
+      // Figure findings point at the whole figure, not at caption text.
+      if (!block || !c.figure || !FIGURES[c.figure.figureId]) throw new Error(`Figure candidate ${c.id} has no figure`);
+      findings[c.id] = {
+        id: c.id,
+        anchor: { blockId: c.blockId, start: 0, end: 0 },
+        order: (blockIndex.get(c.blockId) ?? 0) * 100_000,
+        status: "idle",
+        attempt: 0,
+        resolution: "open",
+        query: c.authorQuery,
+      };
+      continue;
+    }
     const start = block ? findOccurrence(block.text, c.original, c.occurrence) : -1;
     if (start < 0) throw new Error(`Candidate ${c.id} does not match its block text`);
     findings[c.id] = {
@@ -111,7 +132,96 @@ export function createReviewState(candidates: Candidate[] = CANDIDATES, doc: Doc
       query: c.authorQuery,
     };
   }
-  return { doc, findings, mode: "idle", openjevConnected: false, actionSeq: 0 };
+  return { doc, figures: FIGURES, findings, mode: "idle", openjevConnected: false, actionSeq: 0 };
+}
+
+/* ------------------------------------------------------------------ */
+/* What each kind of finding changes                                   */
+/* ------------------------------------------------------------------ */
+
+const REF_IDS = new Set(BLOCKS.filter((b) => b.refId).map((b) => b.refId!));
+
+/** Is the thing this finding would change still exactly as the finding expects? */
+export function targetValid(state: ReviewState, f: FindingState, c: Candidate): boolean {
+  if (!f.anchor) return false;
+  const kind = kindOf(c);
+  if (kind === "figure") {
+    const fig = c.figure!;
+    if (fig.prop === "source") return true;
+    return state.figures[fig.figureId]?.[fig.prop] === fig.from;
+  }
+  if (textAt(state.doc, f.anchor) !== c.original) return false;
+  if (kind === "structure" && c.structure?.rid) {
+    // A link is only valid if its target really exists.
+    return c.structure.refType === "bibr" ? REF_IDS.has(c.structure.rid) : !!state.figures[c.structure.rid];
+  }
+  return true;
+}
+
+/**
+ * Protected content for non-text findings. Data-bearing figure properties (axis
+ * labels carry units) are checked like text; presentation-only properties are not.
+ * Tagging text as XML never changes the wording.
+ */
+function policyOverrides(c: Candidate, valid: boolean): { protectedHits?: ProtectedHit[]; mechanical?: boolean } {
+  const kind = kindOf(c);
+  if (kind === "figure") {
+    const fig = c.figure!;
+    const hits = fig.prop === "yAxisLabel" && typeof fig.from === "string" && typeof fig.to === "string" ? detectProtectedChanges(fig.from, fig.to) : [];
+    return { protectedHits: hits, mechanical: false };
+  }
+  if (kind === "structure") {
+    // Only an exact, unique, existing target is mechanical enough to link automatically.
+    return { protectedHits: [], mechanical: c.category === "structure_link" && valid };
+  }
+  return {};
+}
+
+type ChangeResult = { ok: true; state: ReviewState; anchor: Anchor } | { ok: false };
+
+/** Make the change a finding proposes. `text` is the editor's wording for text (or alt text). */
+function applyChange(state: ReviewState, f: FindingState, c: Candidate, text: string): ChangeResult {
+  if (!f.anchor) return { ok: false };
+  const kind = kindOf(c);
+  if (kind === "figure") {
+    const fig = c.figure!;
+    if (fig.prop === "source") return { ok: false };
+    const next = fig.prop === "altText" ? text : fig.to;
+    const r = patchFigure(state.figures, fig.figureId, fig.prop, fig.from, next);
+    return r.ok ? { ok: true, state: { ...state, figures: r.figures }, anchor: f.anchor } : { ok: false };
+  }
+  if (kind === "structure") {
+    // Tagging leaves the text untouched; the XML is generated from applied links.
+    return textAt(state.doc, f.anchor) === c.original ? { ok: true, state, anchor: f.anchor } : { ok: false };
+  }
+  const edit = applyExactEdit(state.doc, { anchor: f.anchor, expected: c.original, replacement: text });
+  if (!edit.ok) return { ok: false };
+  return { ok: true, state: { ...state, doc: edit.doc, findings: remapAnchors(state.findings, edit.change, f.id) }, anchor: edit.anchor };
+}
+
+/** Reverse exactly what applyChange did, after checking it is still in place. */
+function revertChange(state: ReviewState, f: FindingState, c: Candidate): ChangeResult {
+  if (!f.anchor || f.appliedText === undefined) return { ok: false };
+  const kind = kindOf(c);
+  if (kind === "figure") {
+    const fig = c.figure!;
+    if (fig.prop === "source") return { ok: false };
+    const current = state.figures[fig.figureId][fig.prop];
+    const r = patchFigure(state.figures, fig.figureId, fig.prop, current, fig.from);
+    const expected = fig.prop === "altText" ? current !== fig.from : current === fig.to;
+    return r.ok && expected ? { ok: true, state: { ...state, figures: r.figures }, anchor: f.anchor } : { ok: false };
+  }
+  if (kind === "structure") return { ok: true, state, anchor: f.anchor };
+  const edit = applyExactEdit(state.doc, { anchor: f.anchor, expected: f.appliedText, replacement: c.original });
+  if (!edit.ok) return { ok: false };
+  return { ok: true, state: { ...state, doc: edit.doc, findings: remapAnchors(state.findings, edit.change, f.id) }, anchor: edit.anchor };
+}
+
+/** The label stored as the finding's applied change. */
+function appliedLabel(c: Candidate, text: string): string {
+  if (kindOf(c) === "figure") return c.figure!.prop === "altText" ? `Alt text: ${text}` : c.replacement ?? "";
+  if (kindOf(c) === "structure") return c.replacement ?? "";
+  return text;
 }
 
 /** Move every other finding's anchor across a change in the same block. */
@@ -179,14 +289,15 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
         });
       }
       const c = candidateOf(f.id);
-      const targetValid = textAt(state.doc, f.anchor) === c.original;
+      const valid = targetValid(state, f, c);
       const outcome = routeFinding({
         decision: action.decision,
         category: c.category,
         original: c.original,
         replacement: c.replacement,
-        targetValid,
+        targetValid: valid,
         decider: action.source === "sample" ? "The sample decision" : "OpenJEV",
+        ...policyOverrides(c, valid),
       });
       const evaluated: Partial<FindingState> = {
         status: "evaluated",
@@ -197,14 +308,12 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
         note: undefined,
       };
       if (outcome.treatment === "AUTO_APPLY" && c.replacement !== null) {
-        const edit = applyExactEdit(state.doc, { anchor: f.anchor, expected: c.original, replacement: c.replacement });
-        if (!edit.ok) {
+        const r = applyChange(base, f, c, c.replacement);
+        if (!r.ok) {
           // Policy verified the target, so this is defensive: never force the edit.
-          return update(base, f.id, { ...evaluated, outcome: { ...outcome, treatment: "MANUAL_REVIEW", adjusted: true, summary: "The target text could not be verified at apply time, so the prototype requires editorial review." } });
+          return update(base, f.id, { ...evaluated, outcome: { ...outcome, treatment: "MANUAL_REVIEW", adjusted: true, summary: "The target could not be verified at apply time, so the prototype requires editorial review." } });
         }
-        const findings = remapAnchors(base.findings, edit.change, f.id);
-        findings[f.id] = { ...findings[f.id], ...evaluated, anchor: edit.anchor, appliedText: c.replacement, appliedBy: "system" };
-        return { ...base, doc: edit.doc, findings };
+        return update(r.state, f.id, { ...evaluated, anchor: r.anchor, appliedText: appliedLabel(c, c.replacement), appliedBy: "system" });
       }
       return update(base, f.id, evaluated);
     }
@@ -220,41 +329,53 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
       if (!f?.anchor || f.appliedText === undefined) return state;
       if (!["open", "kept", "applied", "applied_edited"].includes(f.resolution)) return state;
       const c = candidateOf(f.id);
-      const edit = applyExactEdit(state.doc, { anchor: f.anchor, expected: f.appliedText, replacement: c.original });
-      if (!edit.ok) {
-        return update(state, f.id, { note: "This passage has changed since the edit, so it can’t be undone automatically." });
+      const r = revertChange(state, f, c);
+      if (!r.ok) {
+        return update(state, f.id, { note: "This has changed since the edit, so it can’t be undone automatically." });
       }
-      const findings = remapAnchors(state.findings, edit.change, f.id);
       const wasAuto = f.appliedBy === "system";
-      findings[f.id] = {
-        ...findings[f.id],
-        anchor: edit.anchor,
-        appliedText: undefined,
-        appliedBy: undefined,
-        resolution: wasAuto ? "undone" : "open",
-        note: undefined,
+      return {
+        ...update(r.state, f.id, { anchor: r.anchor, appliedText: undefined, appliedBy: undefined, resolution: wasAuto ? "undone" : "open", note: undefined }),
+        actionSeq: state.actionSeq + 1,
       };
-      return { ...state, doc: edit.doc, findings, actionSeq: state.actionSeq + 1 };
     }
 
     case "apply": {
       const f = state.findings[action.id];
       if (!f?.anchor || f.resolution !== "open" || f.status !== "evaluated") return state;
-      if (f.outcome?.treatment !== "SUGGEST") return state;
       const c = candidateOf(f.id);
-      const text = action.text ?? c.replacement;
+      // Suggestions can be applied; for figures (which have no "edit passage"), the editor may
+      // also apply a judgment item's proposed change as their own decision.
+      const manualFigure = f.outcome?.treatment === "MANUAL_REVIEW" && kindOf(c) === "figure";
+      if (f.outcome?.treatment !== "SUGGEST" && !manualFigure) return state;
+      const proposed = kindOf(c) === "figure" && c.figure?.prop === "altText" ? (c.figure.to as string) : c.replacement;
+      const text = action.text ?? proposed;
       if (text === null || text === undefined) return state;
-      const edit = applyExactEdit(state.doc, { anchor: f.anchor, expected: c.original, replacement: text });
-      if (!edit.ok) return update(state, f.id, { note: "The original text is no longer where this suggestion expects it." });
-      const findings = remapAnchors(state.findings, edit.change, f.id);
-      findings[f.id] = {
-        ...findings[f.id],
-        anchor: edit.anchor,
-        appliedText: text,
-        appliedBy: "editor",
-        resolution: text === c.replacement ? "applied" : "applied_edited",
+      const r = applyChange(state, f, c, text);
+      if (!r.ok) return update(state, f.id, { note: "The original is no longer what this suggestion expects." });
+      return {
+        ...update(r.state, f.id, {
+          anchor: r.anchor,
+          appliedText: appliedLabel(c, text),
+          appliedBy: "editor",
+          resolution: text === proposed ? "applied" : "applied_edited",
+        }),
+        actionSeq: state.actionSeq + 1,
       };
-      return { ...state, doc: edit.doc, findings, actionSeq: state.actionSeq + 1 };
+    }
+
+    case "applyEditorText": {
+      const f = state.findings[action.id];
+      if (!f?.anchor || f.resolution !== "open" || f.status !== "evaluated") return state;
+      if (f.outcome?.treatment !== "MANUAL_REVIEW") return state;
+      const c = candidateOf(f.id);
+      if (kindOf(c) !== "text" || !action.text) return state;
+      const r = applyChange(state, f, c, action.text);
+      if (!r.ok) return update(state, f.id, { note: "The passage has changed, so this wording can’t be applied here." });
+      return {
+        ...update(r.state, f.id, { anchor: r.anchor, appliedText: action.text, appliedBy: "editor", resolution: "applied_edited" }),
+        actionSeq: state.actionSeq + 1,
+      };
     }
 
     case "dismiss": {
@@ -280,6 +401,8 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
       const findings = { ...state.findings };
       for (const f of Object.values(state.findings)) {
         if (!f.anchor || f.anchor.blockId !== action.blockId) continue;
+        // Figure findings concern the graphic, not its caption text.
+        if (kindOf(candidateOf(f.id)) === "figure") continue;
         const mapped = mapAnchor(f.anchor, change);
         const applied = f.appliedText !== undefined && ["open", "kept", "applied", "applied_edited"].includes(f.resolution);
 

@@ -3,6 +3,9 @@
 import { Check, Copy, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Candidate } from "@/lib/candidates";
+import type { AssistResponse } from "@/lib/ai/router";
+import type { FindingState } from "@/lib/review";
+import { AiTrace, requestAssist, type AiStatus } from "./Assist";
 import { THRESHOLDS } from "@/lib/policy";
 import { STYLE_PROFILE } from "@/lib/style-profile";
 
@@ -38,9 +41,34 @@ function Modal({ title, subtitle, onClose, children, width = 520 }: { title: str
   );
 }
 
-export function QueryDialog({ candidate, draft, onSave, onClose }: { candidate: Candidate; draft: string; onSave: (text: string) => void; onClose: () => void }) {
+export function QueryDialog({
+  candidate,
+  finding,
+  paragraph,
+  ai,
+  draft,
+  onSave,
+  onClose,
+}: {
+  candidate: Candidate;
+  finding: FindingState;
+  paragraph: string;
+  ai: AiStatus | null;
+  draft: string;
+  onSave: (text: string) => void;
+  onClose: () => void;
+}) {
   const [text, setText] = useState(draft);
   const [copied, setCopied] = useState(false);
+  const [aiRes, setAiRes] = useState<AssistResponse | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const redraft = async () => {
+    setDrafting(true);
+    const r = await requestAssist({ task: "author_query", findingId: finding.id, paragraph, anchorStart: finding.anchor?.start ?? 0, caption: paragraph });
+    setAiRes(r);
+    setDrafting(false);
+    if (r.ok && r.result.task === "author_query") setText(r.result.text);
+  };
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
@@ -56,6 +84,16 @@ export function QueryDialog({ candidate, draft, onSave, onClose }: { candidate: 
           className="block w-full resize-y rounded-md border border-line bg-paper px-3 py-2.5 font-serif text-[15.5px] leading-relaxed text-ink outline-none focus:border-olive-soft focus:ring-2 focus:ring-olive-pale"
         />
         <p className="mt-2 text-[11.5px] text-ink-3">This prototype does not send queries. Your draft is kept with the finding until you reset the demo.</p>
+        {ai?.configured && (
+          <div className="mt-2.5">
+            <button type="button" disabled={drafting} onClick={redraft} className="text-[12px] text-olive-dark underline decoration-olive-soft/70 underline-offset-[3px] hover:text-olive-deep disabled:opacity-50">
+              {drafting ? "Drafting…" : draft ? "Redraft with AI" : "Draft with AI"}
+            </button>
+            <span className="ml-1.5 text-[11px] text-ink-3">· {ai.routes.author_query?.model} (escalates once if the draft fails checks)</span>
+            {aiRes && !aiRes.ok && <p className="mt-1 text-[12px] text-terra">{aiRes.error.message}</p>}
+            {aiRes && <AiTrace response={aiRes} />}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 border-t border-line-soft px-5 py-3">
         <button
@@ -96,12 +134,14 @@ export function SettingsDialog({
   configured,
   model,
   mode,
+  ai,
   onPreview,
 }: {
   onClose: () => void;
   configured: boolean | null;
   model: string;
   mode: "idle" | "live" | "preview";
+  ai: AiStatus | null;
   onPreview: () => void;
 }) {
   const row = (k: string, v: ReactNode) => (
@@ -134,6 +174,31 @@ export function SettingsDialog({
             </button>
           </div>
         )}
+      </section>
+
+      <section className="border-t border-line-soft px-5 py-4">
+        <h3 className="mb-2 text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Model routing</h3>
+        <p className="mb-2 text-[12px] text-ink-2">
+          Cheapest capable tier first. Generation runs only when you ask, sends only the passage involved, is validated by rules, and escalates at most one tier.
+          {ai ? (ai.configured ? ` Limit: ${ai.maxRequestsPerHour} OpenAI requests per hour.` : " OpenAI is not configured (OPENAI_API_KEY); generation features are hidden.") : ""}
+        </p>
+        <table className="w-full text-[12.5px]">
+          <tbody className="text-ink">
+            {[
+              ["Protected-content checks, XML linking, image dpi", "Rules in code", "free"],
+              ["Routing every finding (auto / suggest / judgment)", "OpenJEV", model],
+              ["Draft an author query", "Fast tier", ai?.routes.author_query?.model ?? "—"],
+              ["Draft figure alt text", "Standard tier", ai?.routes.alt_text?.model ?? "—"],
+              ["Rewrite options for meaning-sensitive passages", "Frontier tier, verified by OpenJEV", ai?.routes.rewrite_options?.model ?? "—"],
+            ].map(([task, tier, m]) => (
+              <tr key={task} className="border-t border-line-soft">
+                <td className="py-1.5 pr-3">{task}</td>
+                <td className="py-1.5 pr-3 text-ink-2">{tier}</td>
+                <td className="tabular py-1.5 text-ink-2">{m}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="border-t border-line-soft px-5 py-4">

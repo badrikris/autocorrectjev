@@ -5,7 +5,7 @@
  * Every block has a stable ID. Prepared candidates anchor to these IDs.
  */
 
-export type BlockKind = "title" | "heading" | "subheading" | "paragraph";
+export type BlockKind = "title" | "heading" | "subheading" | "paragraph" | "figure" | "reference";
 
 export interface SectionDef {
   id: string;
@@ -16,7 +16,11 @@ export interface BlockDef {
   id: string;
   sectionId: string;
   kind: BlockKind;
+  /** Body text; for a figure this is its caption, for a reference the full entry. */
   text: string;
+  /** Figure blocks: which figure. Reference blocks: the reference ID used in XML. */
+  figureId?: string;
+  refId?: string;
 }
 
 export const MANUSCRIPT_META = {
@@ -35,6 +39,7 @@ export const SECTIONS: SectionDef[] = [
   { id: "methods", title: "Methods" },
   { id: "results", title: "Results" },
   { id: "discussion", title: "Discussion" },
+  { id: "references", title: "References" },
 ];
 
 export const BLOCKS: BlockDef[] = [
@@ -55,7 +60,7 @@ export const BLOCKS: BlockDef[] = [
     sectionId: "introduction",
     kind: "paragraph",
     text:
-      "Cities are warmer than their rural surroundings, a pattern commonly described as the urban heat island. Dark, impervious surfaces  absorb solar radiation during the day and release it slowly at night, while reduced vegetation limits evaporative cooling. The consequences for human health have been widely documented, particularly for older adults and for people with pre-existing cardiovascular conditions (Marsh and Idowu, 2017).",
+      "Cities are warmer than their rural surroundings, a pattern commonly described as the urban heat island. Dark, impervious surfaces  absorb solar radiation during the day and release it slowly at night, while reduced vegetation limits evaporative cooling. The consequences for human health have been widely documented, particularly for the elderly and for people with pre-existing cardiovascular conditions (Marsh and Idowu, 2017).",
   },
   {
     id: "intro-2",
@@ -87,7 +92,14 @@ export const BLOCKS: BlockDef[] = [
     sectionId: "methods",
     kind: "paragraph",
     text:
-      "Easthollow (population approximately 310,000) lies on a broad river plain and has a temperate oceanic climate. The city comprises 214 census blocks, of which 12 were excluded because more than half of their area was open water or rail infrastructure, leaving 202 blocks for analysis.",
+      "Easthollow (population approximately 310,000) lies on a broad river plain and has a temperate oceanic climate. The city comprises 214 census blocks, of which 12 were excluded because more than half of their area was open water or rail infrastructure, leaving 202 blocks for analysis (Figure 1).",
+  },
+  {
+    id: "fig-1",
+    sectionId: "methods",
+    kind: "figure",
+    figureId: "fig1",
+    text: "Tree canopy cover across the census blocks of Easthollow. Blocks excluded from the analysis (open water and rail land) are shown in grey.",
   },
   { id: "h-data", sectionId: "methods", kind: "subheading", text: "Canopy and temperature data" },
   {
@@ -102,7 +114,7 @@ export const BLOCKS: BlockDef[] = [
     sectionId: "methods",
     kind: "paragraph",
     text:
-      "Surface temperature was derived from the thermal infrared band using a single-channel algorithm, with land surface emissivity estimated from the vegetation fraction of each pixel. Scenes were aggregated to census block boundaries by area-weighted averaging, and pixels flagged as cloud, cloud shadow or water were excluded before averaging.",
+      "Using a single-channel algorithm, surface temperature was derived from the thermal infrared band, with land surface emissivity estimated from the vegetation fraction of each pixel. Scenes were aggregated to census block boundaries by area-weighted averaging, and pixels flagged as cloud, cloud shadow or water were excluded before averaging.",
   },
   { id: "h-analysis", sectionId: "methods", kind: "subheading", text: "Statistical analysis" },
   {
@@ -120,14 +132,21 @@ export const BLOCKS: BlockDef[] = [
     sectionId: "results",
     kind: "paragraph",
     text:
-      "Mean block-level LST ranged from 27.4 °C to 38.9 °C across the study period. Higher canopy cover was associated with lower surface temperature in every year examined, and the relationship remained significant after adjustment for impervious surface fraction (β = −0.21 °C per percentage point of canopy, 95 % CI −0.27 to −0.15).",
+      "Mean block-level LST ranged from 27.4 °C to 38.9 °C across the study period. Higher canopy cover was associated with lower surface temperature in every year examined, and the relationship remained significant after adjustment for impervious surface fraction (β = −0.21 °C per percentage point of canopy, 95 % CI −0.27 to −0.15). The relationship across all blocks is shown in Figure 2.",
+  },
+  {
+    id: "fig-2",
+    sectionId: "results",
+    kind: "figure",
+    figureId: "fig2",
+    text: "Mean summer land surface temperature against tree canopy cover for n = 214 census blocks. The line shows an ordinary least-squares fit.",
   },
   {
     id: "res-2",
     sectionId: "results",
     kind: "paragraph",
     text:
-      "Blocks in the highest canopy quartile were on average 1.8 °C cooler than blocks in the lowest quartile. Sites that recieved afternoon shade from mature trees were significantly cooler than comparable unshaded sites, and a large number of the warmest blocks were located in the industrial east of the city.",
+      "Blocks in the highest canopy quartile were on average 1.8 °C cooler than blocks in the lowest quartile. Sites that recieved afternoon shade from mature trees were significantly cooler than comparable unshaded sites, and a large number of the warmest blocks were located in the industrial east of the city (Figure 3).",
   },
   {
     id: "res-3",
@@ -141,7 +160,7 @@ export const BLOCKS: BlockDef[] = [
     sectionId: "results",
     kind: "paragraph",
     text:
-      "These patterns were not sensitive to the source of the canopy data. Repeating the analysis with canopy derived from a coarser 10 m land cover product produced a slightly weaker association, but the ranking of blocks by surface temperature was almost unchanged. Excluding the warmest summer in the record did not alter the direction of any reported effect.",
+      "These patterns were not sensitive to the source of the canopy data. Repeating the analysis with canopy derived from a coarser 10 m land cover product produced a slightly weaker association, but the ranking of blocks by surface temperature was almost unchanged. Excluding the warmest summer in the record does not alter the direction of any reported effect.",
   },
 
   // Discussion
@@ -173,6 +192,30 @@ export const BLOCKS: BlockDef[] = [
     kind: "paragraph",
     text:
       "Several limitations should be noted. Satellite overpasses capture conditions at a single time of day, and 30 m thermal pixels blur the edges of small parks. Future work should combine mobile air-temperature transects with canopy mapping in order to assess night-time conditions, and should test whether new plantings deliver the cooling predicted by cross-sectional models.",
+  },
+
+  // References
+  { id: "h-references", sectionId: "references", kind: "heading", text: "References" },
+  {
+    id: "ref-1",
+    sectionId: "references",
+    kind: "reference",
+    refId: "r1",
+    text: "Marsh, J. and Idowu, T. (2017) Heat, health and the built environment: a review of urban vulnerability. Journal of Urban Health Studies, 12(3), pp. 211-229.",
+  },
+  {
+    id: "ref-2",
+    sectionId: "references",
+    kind: "reference",
+    refId: "r2",
+    text: "Lindell, K. (2020) Street trees and surface cooling in temperate cities. Urban Climate Letters, 8, pp. 44–58.",
+  },
+  {
+    id: "ref-3",
+    sectionId: "references",
+    kind: "reference",
+    refId: "r3",
+    text: "Okafor, R., Brandt, S. and Leclerc, M. (2019) Satellite thermal imagery for neighbourhood heat mapping. Remote Sensing of Cities, 5(2), pp. 97–110.",
   },
 ];
 

@@ -93,16 +93,21 @@ async function readBody(res: Response): Promise<unknown> {
   }
 }
 
+type Payload = { model: string; questions: Record<string, unknown> } & Record<string, unknown>;
+
+export type SystemOneRawResult =
+  | { ok: true; body: unknown; requestId?: string; latencyMs: number }
+  | { ok: false; error: OpenJevError; body?: unknown; requestId?: string; latencyMs?: number };
+
 /**
- * One evaluation. At most one retry, and only for transient failures
+ * POST /v1/systemone. At most one retry, and only for transient failures
  * (429, 5xx, connection errors). Timeouts are not retried.
  */
-export async function callOpenJev(payload: { model: string; questions: Record<string, unknown> } & Record<string, unknown>, config: OpenJevConfig): Promise<OpenJevCallResult> {
+export async function postSystemOne(payload: Payload, config: OpenJevConfig): Promise<SystemOneRawResult> {
   if (!config.apiKey) {
     return { ok: false, error: { kind: "not_configured", message: "OPENJEV_API_KEY is not set." } };
   }
   const doFetch = config.fetchImpl ?? fetch;
-  const expectMeaning = "meaning_preserved" in payload.questions;
   const url = `${config.baseURL}/v1/systemone`;
 
   let lastError: OpenJevError | null = null;
@@ -149,24 +154,33 @@ export async function callOpenJev(payload: { model: string; questions: Record<st
         await wait(Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 5 ? retryAfter * 1000 : config.retryDelayMs ?? 1000);
         continue;
       }
-      return { ok: false, error: lastError, technical: { request: payload, response: body, requestId, latencyMs } };
+      return { ok: false, error: lastError, body, requestId, latencyMs };
     }
-
-    const decision = parseOpenJevResponse(body, expectMeaning);
-    const technical: OpenJevTechnical = {
-      model: isRecord(body) && typeof body.model === "string" ? body.model : payload.model,
-      requestId,
-      latencyMs,
-      usage: isRecord(body) && isRecord(body.usage) ? (body.usage as OpenJevTechnical["usage"]) : undefined,
-      request: payload,
-      response: body,
-    };
-    if (!decision) {
-      return { ok: false, error: { kind: "malformed", requestId, message: "Response did not match the documented System One format." }, technical };
-    }
-    return { ok: true, decision, technical };
+    return { ok: true, body, requestId, latencyMs };
   }
   return { ok: false, error: lastError ?? { kind: "network", message: "Unknown failure." } };
+}
+
+/** One routing evaluation: the transport above plus strict parsing of the three answers. */
+export async function callOpenJev(payload: Payload, config: OpenJevConfig): Promise<OpenJevCallResult> {
+  const r = await postSystemOne(payload, config);
+  if (!r.ok) {
+    return { ok: false, error: r.error, technical: r.body === undefined ? undefined : { request: payload, response: r.body, requestId: r.requestId, latencyMs: r.latencyMs } };
+  }
+  const body = r.body;
+  const decision = parseOpenJevResponse(body, "meaning_preserved" in payload.questions);
+  const technical: OpenJevTechnical = {
+    model: isRecord(body) && typeof body.model === "string" ? body.model : payload.model,
+    requestId: r.requestId,
+    latencyMs: r.latencyMs,
+    usage: isRecord(body) && isRecord(body.usage) ? (body.usage as OpenJevTechnical["usage"]) : undefined,
+    request: payload,
+    response: body,
+  };
+  if (!decision) {
+    return { ok: false, error: { kind: "malformed", requestId: r.requestId, message: "Response did not match the documented System One format." }, technical };
+  }
+  return { ok: true, decision, technical };
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));

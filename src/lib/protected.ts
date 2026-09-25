@@ -58,8 +58,9 @@ const CLAIM_STRENGTH = new Set([
   "meaningfully", "robust", "robustly", "conclusive", "conclusively", "always", "all", "some", "every",
 ]);
 
+// A sign only counts when it doesn't follow a digit ("211-229" is a range, not 211 and −229).
 const NUMBER_WITH_UNIT =
-  /[−\-+]?\d+(?:[.,]\d+)*(?:\s?(?:°C|°F|%|km²|km|m²|mm|cm|m|ha|K|h|min|s)(?![\p{L}]))?/gu;
+  /(?:(?<!\d)[−\-+])?\d+(?:[.,]\d+)*(?:\s?(?:°C|°F|%|km²|km|m²|mm|cm|m|ha|K|h|min|s)(?![\p{L}]))?/gu;
 const UNIT_ONLY = /(?:°C|°F|%|km²|m²)/gu;
 const STATISTIC =
   /(?:\b[pPrRnNtFβχ]²?\s?[=<>≤≥]\s?[−\-]?\d+(?:\.\d+)?)|(?:\d+\s?%\s?CI\b)|\bCI\b|β/gu;
@@ -119,6 +120,21 @@ export function detectProtectedChanges(original: string, replacement: string): P
 
   const removedChars = original.slice(region.start, region.start + region.removedLength);
   const insertedChars = replacement.slice(region.start, region.start + region.insertedLength);
+
+  // Defining an abbreviation at first use — "land surface temperature" → "land surface temperature (LST)" —
+  // adds nothing but the initials of the words it follows. That does not alter the author's terminology.
+  if (region.removedLength === 0 && region.start === original.length) {
+    const abbr = /^ \(([A-Z]{2,6})\)$/.exec(insertedChars)?.[1];
+    if (abbr) {
+      const initials = original
+        .trim()
+        .split(/\s+/)
+        .slice(-abbr.length)
+        .map((w) => w[0]?.toUpperCase())
+        .join("");
+      if (initials === abbr) return hits;
+    }
+  }
 
   // Span-level checks, on both sides of the change.
   for (const s of spans(original)) {

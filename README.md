@@ -135,6 +135,59 @@ A 429, 5xx or network error is retried once, automatically. Nothing is retried a
 
 ---
 
+## Beyond basic corrections
+
+The review now covers six editorial passes. Every finding still goes through OpenJEV and the same safety policy.
+
+| Pass | Examples in the demo | Typical treatment |
+| --- | --- | --- |
+| **Language** | typos, spacing, agreement, *the elderly* → *older adults*, a dangling modifier, tense consistency | auto (mechanical fixes only) or suggest |
+| **Consistency** | abbreviation not defined at first use, 1.8 vs 1.6 °C, caption *n* = 214 vs 202 in the text | suggest or judgment |
+| **Meaning** | ambiguous *they*/*it*, *associated* → *caused*, *suggest* → *demonstrate* | judgment, or suppressed |
+| **References** | citation year ≠ reference list, uncited reference, page-range en dash | judgment, or auto for the dash |
+| **Structure (XML)** | link citations and figure mentions as `<xref>`, a mention of a Figure 3 that doesn't exist | auto for exact unique links, judgment otherwise |
+| **Figures** | red–green palette, 176 dpi raster, °F axis on °C data, 5.5 pt axis text, missing alt text | suggest or judgment, never auto |
+
+### Structure: live JATS XML
+
+Use the **Manuscript / XML structure** switch at the top of the reading column. The XML (JATS 1.3) is generated live from the current text, the figures and the tagging decisions (`src/lib/jats.ts`), so accepting a link or correcting a figure shows up immediately. Findings are highlighted and clickable in the XML, and the panel follows your scrolling there too. *Copy XML* copies the document.
+
+Tagging never changes the wording. A link can be applied automatically only when its target exists and is unique. A mention of a missing figure can never be linked.
+
+### Figures
+
+Figures are drawn from editable specifications (`src/lib/figures.ts`), so a correction genuinely re-renders the graphic and undo restores it exactly. Figure checks appear as chips under each figure; the active one outlines its region on the graphic. Each card shows before/after close-ups.
+
+- **Data-bearing properties are protected.** An axis unit is checked like text, so °F → °C needs judgment. The editor can still apply it as their own decision.
+- **Presentation-only properties are not protected**, but they are never auto-applied either: palette, text size, alt text.
+- **Some problems can't be fixed by an editor.** A low-resolution raster gets an author query.
+
+## Model routing: cheapest capable tier first
+
+| Step | Handled by | Why |
+| --- | --- | --- |
+| Protected-content checks, XML linking, image dpi, validation of every AI output | **Rules in code** | Free, exact, auditable |
+| Routing every finding (auto / suggest / judgment / suppress) | **OpenJEV** | A classification problem; fast and cheap |
+| Drafting an author query | **Fast tier**, `gpt-5.4-nano`, minimal reasoning | Short, templated; escalates once to the standard tier if the draft fails validation |
+| Drafting figure alt text from figure data | **Standard tier**, `gpt-5.4-mini`, low reasoning | Must describe structured facts faithfully; escalates once to the frontier tier |
+| Rewrite options for meaning-sensitive "Needs judgment" passages | **Frontier tier**, `gpt-5.5`, low reasoning | Requires real reasoning about meaning; no escalation |
+
+Cost and safety controls (`src/lib/ai/`):
+
+- **Only on demand.** Nothing is generated when you start a review. Each feature is a button, and it's only offered where it applies (rewrites only for ambiguity, causal or claim-strength wording, statistical wording and dangling modifiers). The server enforces this too.
+- **Minimal input.** Only the passage and its sentence context are sent, never the whole manuscript. `store: false` is set on every request.
+- **Bounded output.** Each task has a strict JSON schema and a `max_output_tokens` cap. An incomplete response is treated as an error.
+- **Deterministic validation, then escalate once.** For example, a draft that introduces a number not in the source is rejected and retried one tier up. Transport and auth errors are never escalated.
+- **Frontier output is double-checked.** Rewrite options that change protected content (numbers, negation, causation, claim strength, citations…) are withheld. The survivors are scored for meaning preservation by **one** batched OpenJEV call and sorted.
+- **Cache and budget.** Identical requests are answered from an in-memory cache at no cost. An hourly request cap applies (`OPENAI_MAX_REQUESTS_PER_HOUR`, default 60).
+- **Transparent.** Every result shows its route: each model tried, why a draft was rejected, the OpenJEV check, and the tokens used.
+
+To enable it, add to `.env.local`:
+```
+OPENAI_API_KEY=sk-...
+```
+The per-tier models can be overridden with `OPENAI_MODEL_FAST`, `OPENAI_MODEL_STANDARD` and `OPENAI_MODEL_FRONTIER`. Without a key, the generation features are hidden and everything else works.
+
 ## Code map
 
 ```
@@ -148,6 +201,12 @@ src/lib/protected.ts          protected-change detection (pure, tested)
 src/lib/document.ts           exact, offset-anchored edits and anchor mapping
 src/lib/review.ts             review state reducer (auto-apply, undo, staleness)
 src/lib/sample-decisions.ts   preview-mode fixtures (never shown as OpenJEV output)
+src/lib/figures.ts            figure specs, verified patching, deterministic data
+src/lib/jats.ts               live JATS 1.3 XML generation
+src/lib/ai/openai.ts          server-only OpenAI Responses client
+src/lib/ai/tasks.ts           generation tasks: tier, prompts, deterministic validators
+src/lib/ai/router.ts          escalation, cache, budget, OpenJEV verification, trace
+src/app/api/ai/*              server routes (status, assist)
 src/app/api/openjev/*             server routes (status, evaluate)
 src/components/*              workspace, manuscript, review panel, cards, dialogs
 tests/*                       routing, vetoes, exact edits, undo, staleness, OpenJEV client
@@ -170,6 +229,13 @@ The stack is Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Luci
 
 ---
 
+### Another minute: deeper checks, XML and figures
+
+1. Scroll to **Figure 1**. The *Colour accessibility* chip shows a before/after of the legend. **Apply**, and the map re-renders in a colour-blind-safe olive scale. **Undo** brings the red–green back. *Image resolution* explains the 176 dpi problem and offers an author query.
+2. In **Figure 2**, *Axis units* (°F on °C data) is a judgment item. **Apply proposed change** relabels the axis as your decision.
+3. On the ambiguous *they* in the Introduction, click **Suggest rewrites**. A frontier model proposes options; an unsafe one is withheld, and the rest are scored by OpenJEV. **Use this** applies one to exactly that passage.
+4. Switch to **XML structure**. The citation and figure links appear as `<xref>`, *Figure 3* stays unlinked, and the uncited reference is highlighted in `<ref-list>`.
+
 ## Honest notes
 
 - **Live OpenJEV was not exercised from the build environment.** The sandbox where this was built blocks `openjev.sh` and `api.openjev.sh`, so the docs at https://openjev.sh/docs could not be read. The integration follows the OpenJEV client library `like-openjev` (v1.0.3 on npm), which targets `https://api.openjev.sh`:
@@ -182,5 +248,6 @@ The stack is Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Luci
 - **Short input windows.** Open System One models such as Laya read at most about 512 tokens, and silently cut off the end of `state`. So the request puts the proposed edit first and the surrounding paragraphs last, meaning any truncation costs context rather than the edit itself.
 - The routing thresholds are illustrative. Model confidence is not a guarantee of editorial correctness.
 - *Demo Journal Style* is fictional. It is **not** a verified requirement of any TNQ customer or real journal.
-- The manuscript, authors, city, citations and data are synthetic.
+- The manuscript, authors, city, citations, figures and data are synthetic. There are now 39 prepared findings across six passes.
+- **OpenAI was not exercised live either.** `api.openai.com` is blocked from the build environment. The client follows the Responses API types in the official `openai` package (v7.23), and the default model names come from that package's model list. The flow was tested against a local stand-in, as for OpenJEV. Check the model names and prices for your account, and override them by environment variable if needed.
 - The layout is designed for desktop, and was reviewed at 1440 × 900 and 1280 × 800. It is not designed for small screens.

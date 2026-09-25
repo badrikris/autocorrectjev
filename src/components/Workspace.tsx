@@ -11,6 +11,8 @@ import { OutlineRail } from "./OutlineRail";
 import { ReviewPanel, type Filter } from "./ReviewPanel";
 import { TopBar, type OpenJevIndicator } from "./TopBar";
 import { useEvaluator } from "./useEvaluator";
+import { XmlView } from "./XmlView";
+import type { AiStatus } from "./Assist";
 import { usePanelFollow } from "./usePanelFollow";
 
 export function Workspace() {
@@ -24,6 +26,8 @@ export function Workspace() {
   const [queryId, setQueryId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [startPrompt, setStartPrompt] = useState(false);
+  const [view, setView] = useState<"text" | "xml">("text");
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
 
   const mainRef = useRef<HTMLElement>(null);
   const visibleRef = useRef<string[]>([]);
@@ -42,6 +46,10 @@ export function Workspace() {
       .then((r) => r.json() as Promise<OpenJevStatusBody>)
       .then((s) => alive && setOpenJevStatus(s))
       .catch(() => alive && setOpenJevStatus({ configured: false, model: "openjev" }));
+    fetch("/api/ai/status", { cache: "no-store" })
+      .then((r) => r.json() as Promise<AiStatus>)
+      .then((s) => alive && setAiStatus(s))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -88,7 +96,7 @@ export function Workspace() {
       root.removeEventListener("scroll", recompute);
       if (timer) clearTimeout(timer);
     };
-  }, [docOrder, editing]);
+  }, [docOrder, editing, view]);
 
   // The panel follows the manuscript, except while the editor is working in it.
   const interacting = pointerInPanel || interactingCards.size > 0 || queryId !== null;
@@ -248,6 +256,10 @@ export function Workspace() {
       },
       openQuery: (id) => setQueryId(id),
       retry: (id) => dispatch({ type: "queue", ids: [id] }),
+      applyEditorText: (id, text) => {
+        dispatch({ type: "applyEditorText", id, text });
+        finish(id);
+      },
     }),
     [state.findings, revealInManuscript, finish],
   );
@@ -337,9 +349,39 @@ export function Workspace() {
       <div className="flex min-h-0 flex-1">
         <OutlineRail currentSection={currentSection} needsBySection={needsBySection} onNavigate={navigateSection} onStyle={() => setSettingsOpen(true)} />
 
-        <main ref={mainRef} className="quiet-scroll min-w-0 flex-1 overflow-y-auto px-6" onClick={() => undefined}>
+        <main ref={mainRef} className="quiet-scroll relative min-w-0 flex-1 overflow-y-auto px-6">
+          <div className="sticky top-0 z-10 -mx-6 flex justify-center bg-gradient-to-b from-ivory via-ivory/90 to-transparent pb-3 pt-4">
+            <div role="tablist" aria-label="View" className="flex rounded-full border border-line bg-paper/90 p-[3px] text-[12.5px] shadow-[var(--shadow-hair)] backdrop-blur-sm">
+              {(
+                [
+                  ["text", "Manuscript"],
+                  ["xml", "XML structure"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={view === id}
+                  onClick={() => {
+                    setEditing(null);
+                    setView(id);
+                  }}
+                  className={`view-tab rounded-full px-3.5 py-1 ${view === id ? "bg-olive text-paper shadow-[var(--shadow-hair)]" : "text-ink-2 hover:text-ink"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {view === "xml" ? (
+            <div key="xml" className="view-enter -mt-6">
+              <XmlView state={state} selectedId={selectedId} activeId={state.mode === "idle" ? null : activeId} flashId={flashId} onSelect={selectFromManuscript} />
+            </div>
+          ) : (
+          <div key="text" className="view-enter -mt-6">
           <Manuscript
             doc={state.doc}
+            figures={state.figures}
             findingsByBlock={findingsByBlock}
             selectedId={selectedId}
             activeId={state.mode === "idle" ? null : activeId}
@@ -350,6 +392,8 @@ export function Workspace() {
             onSaveEdit={onSaveEdit}
             onCancelEdit={() => setEditing(null)}
           />
+          </div>
+          )}
         </main>
 
         <ReviewPanel
@@ -371,12 +415,16 @@ export function Workspace() {
           onStart={onStart}
           canStart={openjevStatus !== null}
           onPointerInside={setPointerInPanel}
+          ai={aiStatus}
           onRetryFailed={() => dispatch({ type: "queue", ids: all.filter((f) => f.status === "failed").map((f) => f.id) })}
         />
       </div>
 
       {queryFinding && (
         <QueryDialog
+          ai={aiStatus}
+          finding={queryFinding}
+          paragraph={queryFinding.anchor ? state.doc.blocks[queryFinding.anchor.blockId].text : ""}
           candidate={candidateOf(queryFinding.id)}
           draft={queryFinding.query ?? ""}
           onSave={(text) => dispatch({ type: "saveQuery", id: queryFinding.id, text })}
@@ -389,6 +437,7 @@ export function Workspace() {
           configured={openjevStatus?.configured ?? null}
           model={openjevStatus?.model ?? "openjev"}
           mode={state.mode}
+          ai={aiStatus}
           onPreview={startPreview}
         />
       )}

@@ -125,6 +125,18 @@ describe("protected-change vetoes", () => {
     expect(out.treatment).toBe("AUTO_APPLY");
   });
 
+  it("a page-range hyphen → en dash is punctuation, not a change to a number", () => {
+    expect(detectProtectedChanges("211-229", "211–229")).toEqual([]);
+    expect(mechanicalShape("211-229", "211–229")).toBe("punctuation");
+    expect(detectProtectedChanges("−0.27", "0.27").map((h) => h.kind)).toContain("number");
+  });
+
+  it("defining an abbreviation at first use does not count as altering terminology", () => {
+    expect(detectProtectedChanges("summer land surface temperature", "summer land surface temperature (LST)")).toEqual([]);
+    // …but an abbreviation that doesn't match the words it follows is not exempt.
+    expect(detectProtectedChanges("summer surface heat", "summer surface heat (LST)").map((h) => h.kind)).toContain("terminology");
+  });
+
   it("ordinary typo fixes, spacing and heading case are unprotected", () => {
     expect(detectProtectedChanges("teh", "the")).toEqual([]);
     expect(detectProtectedChanges("surfaces  absorb", "surfaces absorb")).toEqual([]);

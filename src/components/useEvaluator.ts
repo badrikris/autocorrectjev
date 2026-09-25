@@ -10,6 +10,7 @@ import { candidateOf, sortedFindings, type ReviewAction, type ReviewState } from
 import type { EvaluateRequestBody, EvaluateResponseBody } from "@/lib/openjev/types";
 import { sectionTitle } from "@/lib/manuscript";
 import { SAMPLE_DECISIONS } from "@/lib/sample-decisions";
+import { effectiveDpi } from "@/lib/figures";
 
 const CONCURRENCY = 3;
 
@@ -28,6 +29,7 @@ function buildBody(state: ReviewState, id: string): EvaluateRequestBody | null {
     sectionTitle: block.kind === "subheading" ? `${sectionTitle(block.sectionId)} (subheading)` : sectionTitle(block.sectionId),
     precedingText: neighbour(i - 1),
     followingText: neighbour(i + 1),
+    figure: c.figure ? { ...state.figures[c.figure.figureId], effective_dpi: effectiveDpi(state.figures[c.figure.figureId]) } : undefined,
     related: (c.relatedBlocks ?? []).map((bid) => ({
       label: `${sectionTitle(doc.blocks[bid].sectionId)} paragraph`,
       text: doc.blocks[bid].text,

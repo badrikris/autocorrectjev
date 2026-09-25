@@ -2,7 +2,12 @@
 
 import { Check, ChevronDown, FileQuestion, PenLine, RotateCw, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Candidate } from "@/lib/candidates";
+import { kindOf, passOf, type Candidate } from "@/lib/candidates";
+import { effectiveDpi, type FigureSpec, type FigureState } from "@/lib/figures";
+import { FigureGraphic, REGION_CROP } from "./FigureView";
+import { AiTrace, requestAssist, type AiStatus } from "./Assist";
+import { REWRITE_CATEGORIES } from "@/lib/ai/tasks";
+import type { AssistResponse } from "@/lib/ai/router";
 import { wordDiff } from "@/lib/diff";
 import { ERROR_COPY } from "@/lib/openjev/types";
 import { ROUTES } from "@/lib/policy";
@@ -18,12 +23,17 @@ export interface CardActions {
   editPassage: (id: string) => void;
   openQuery: (id: string) => void;
   retry: (id: string) => void;
+  applyEditorText: (id: string, text: string) => void;
 }
 
 interface Props {
   finding: FindingState;
   candidate: Candidate;
   blockText: string | null;
+  /** Current figure specs, for before/after previews of figure findings. */
+  figures: FigureState;
+  /** Generation availability; null while unknown. */
+  ai: AiStatus | null;
   selected: boolean;
   /** Outside the passage being read: fade back. */
   dim?: boolean;
@@ -35,7 +45,7 @@ interface Props {
   muted?: boolean;
 }
 
-export function FindingCard({ finding: f, candidate: c, blockText, selected, dim = false, active = false, onToggle, actions, onInteracting, muted }: Props) {
+export function FindingCard({ finding: f, candidate: c, blockText, figures, ai, selected, dim = false, active = false, onToggle, actions, onInteracting, muted }: Props) {
   const status = statusLabel(f);
   const treatment = treatmentOf(f);
   const [editText, setEditText] = useState<string | null>(null);
@@ -104,7 +114,8 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, dim
       >
         <div className="flex items-center gap-2">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[status.tone]} ${f.status === "evaluating" ? "pulse-dot" : ""}`} />
-          <span className={`text-[12.5px] font-medium ${resolvedMuted ? "text-ink-2" : "text-ink"}`}>{c.label}</span>
+          <span className={`truncate text-[12.5px] font-medium ${resolvedMuted ? "text-ink-2" : "text-ink"}`}>{c.label}</span>
+          <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.1em] text-ink-3">{passOf(c)}</span>
           <span className={`ml-auto flex items-center gap-1 text-[11.5px] ${TONE_TEXT[status.tone]}`}>
             {(f.resolution === "kept" || f.resolution === "applied" || f.resolution === "applied_edited" || f.resolution === "reviewed") && <Check size={12} strokeWidth={2} />}
             {status.text}
@@ -112,7 +123,19 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, dim
         </div>
         <Collapse open={!expanded}>
           <div className={`mt-1 truncate pl-3.5 font-serif text-[14.5px] leading-snug ${resolvedMuted ? "text-ink-3" : "text-ink-2"}`}>
-            <CompactPreview original={c.original} replacement={shownReplacement} />
+            {kindOf(c) === "structure" ? (
+              <span>
+                “{c.original}”
+                {c.structure?.rid && (
+                  <>
+                    <span className="mx-1.5 font-sans text-[12px] text-ink-3">→</span>
+                    <span className="font-mono text-[12.5px] text-ink">xref {c.structure.rid}</span>
+                  </>
+                )}
+              </span>
+            ) : (
+              <CompactPreview original={c.original} replacement={shownReplacement} />
+            )}
           </div>
         </Collapse>
       </button>
@@ -120,7 +143,11 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, dim
       {renderBody && (
         <Collapse open={expanded}>
         <div className="px-3.5 pb-3.5">
-          {shownReplacement !== null ? (
+          {kindOf(c) === "figure" ? (
+            <FigureDiff candidate={c} finding={f} figures={figures} replacementLabel={treatment === "SUGGEST" ? "Suggestion" : "Proposed"} />
+          ) : kindOf(c) === "structure" ? (
+            <StructureDiff candidate={c} before={ctx.before} after={ctx.after} />
+          ) : shownReplacement !== null ? (
             <DiffRows
               before={ctx.before}
               after={ctx.after}
@@ -173,10 +200,36 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, dim
                 className="block w-full resize-y rounded-[5px] border border-line bg-paper px-2.5 py-1.5 font-serif text-[15px] leading-snug text-ink outline-none focus:border-olive-soft focus:ring-2 focus:ring-olive-pale"
               />
               <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">Applied as your edit, not as an OpenJEV-approved suggestion.</p>
+              {c.figure?.prop === "altText" && ai?.configured && (
+                <AltTextDraft
+                  finding={f}
+                  candidate={c}
+                  figures={figures}
+                  caption={blockText ?? ""}
+                  model={ai.routes.alt_text?.model}
+                  onDraft={(t) => setEditText(t)}
+                />
+              )}
             </div>
           )}
 
           <div className="mt-3.5 flex flex-wrap items-center gap-1.5">{renderActions()}</div>
+
+          {treatment === "MANUAL_REVIEW" &&
+            f.resolution === "open" &&
+            kindOf(c) === "text" &&
+            REWRITE_CATEGORIES.has(c.category) &&
+            f.anchor &&
+            blockText !== null &&
+            ai?.configured && (
+              <RewriteOptions
+                finding={f}
+                candidate={c}
+                paragraph={blockText}
+                model={ai.routes.rewrite_options?.model}
+                onUse={(t) => actions.applyEditorText(f.id, t)}
+              />
+            )}
 
           {(f.outcome || f.status === "failed" || f.status === "stale") && (
             <div className="mt-3 border-t border-line-soft pt-2.5">
@@ -261,15 +314,17 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, dim
           <Btn kind="primary" onClick={() => actions.apply(f.id)} icon={<Check size={13} />}>
             Apply
           </Btn>
-          <Btn
-            onClick={() => {
-              setEditText(c.replacement ?? "");
-              requestAnimationFrame(() => editRef.current?.focus());
-            }}
-            icon={<PenLine size={13} />}
-          >
-            Edit suggestion
-          </Btn>
+          {(kindOf(c) === "text" || c.figure?.prop === "altText") && (
+            <Btn
+              onClick={() => {
+                setEditText(kindOf(c) === "figure" ? String(c.figure?.to ?? "") : (c.replacement ?? ""));
+                requestAnimationFrame(() => editRef.current?.focus());
+              }}
+              icon={<PenLine size={13} />}
+            >
+              Edit suggestion
+            </Btn>
+          )}
           <Btn kind="quiet" onClick={() => actions.dismiss(f.id)} icon={<X size={13} />}>
             Dismiss
           </Btn>
@@ -277,14 +332,25 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, dim
       );
     }
     if (treatment === "MANUAL_REVIEW") {
+      // Figures can't be fixed with "Edit passage", so the editor may apply the proposed change
+      // themselves — recorded as their decision, not the system's.
+      const figureFix = kindOf(c) === "figure" && c.replacement !== null;
+      const editable = kindOf(c) !== "figure";
       return (
         <>
           <Btn kind="primary" onClick={() => actions.markReviewed(f.id)} icon={<Check size={13} />}>
             Mark reviewed
           </Btn>
-          <Btn onClick={() => actions.editPassage(f.id)} icon={<PenLine size={13} />}>
-            Edit passage
-          </Btn>
+          {figureFix && (
+            <Btn onClick={() => actions.apply(f.id)} icon={<PenLine size={13} />}>
+              Apply proposed change
+            </Btn>
+          )}
+          {editable && (
+            <Btn onClick={() => actions.editPassage(f.id)} icon={<PenLine size={13} />}>
+              Edit passage
+            </Btn>
+          )}
           {c.authorQuery && (
             <Btn kind="quiet" onClick={() => actions.openQuery(f.id)} icon={<FileQuestion size={13} />}>
               Draft author query
@@ -372,6 +438,167 @@ function DiffRows({ before, after, original, replacement, replacementLabel }: { 
           {before}
           <span className="text-ink">{row("replacement")}</span>
           {after}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** On-demand rewrite options for a meaning-sensitive passage (frontier model, then verified). */
+function RewriteOptions({ finding: f, candidate: c, paragraph, model, onUse }: { finding: FindingState; candidate: Candidate; paragraph: string; model?: string; onUse: (text: string) => void }) {
+  const [state, setState] = useState<"idle" | "loading" | "done">("idle");
+  const [res, setRes] = useState<AssistResponse | null>(null);
+  const ask = async () => {
+    setState("loading");
+    const r = await requestAssist({ task: "rewrite_options", findingId: f.id, paragraph, anchorStart: f.anchor!.start });
+    setRes(r);
+    setState("done");
+  };
+  if (state === "idle") {
+    return (
+      <div className="mt-3 border-t border-line-soft pt-2.5">
+        <button type="button" onClick={ask} className="text-[12px] text-olive-dark underline decoration-olive-soft/70 underline-offset-[3px] hover:text-olive-deep" title={`Sends only this passage to ${model ?? "OpenAI"}; options are then checked by safety rules and OpenJEV.`}>
+          Suggest rewrites
+        </button>
+        <span className="ml-1.5 text-[11px] text-ink-3">· {model ?? "frontier model"} for "{c.label.toLowerCase()}", checked by rules and OpenJEV</span>
+      </div>
+    );
+  }
+  return (
+    <div className="fade-in mt-3 border-t border-line-soft pt-2.5">
+      <p className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink-3">Rewrite options</p>
+      {state === "loading" ? (
+        <p className="mt-2 flex items-center gap-2 text-[12.5px] text-ink-2">
+          <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-olive" /> Asking {model ?? "the frontier model"}, then checking each option…
+        </p>
+      ) : res && res.ok && res.result.task === "rewrite_options" ? (
+        <ul className="mt-1.5 space-y-1.5">
+          {res.result.options.map((o) => (
+            <li key={o.text} className="rounded-[5px] border border-line-soft bg-paper px-2.5 py-2">
+              <p className="font-serif text-[14.5px] leading-snug text-ink">{o.text}</p>
+              <div className="mt-1 flex items-center gap-2 text-[11.5px] text-ink-3">
+                <span className="truncate">{o.note}</span>
+                {o.meaningPreserved !== null && (
+                  <span className={`tabular shrink-0 ${o.meaningPreserved >= 0.8 ? "text-olive-dark" : "text-terra"}`} title="OpenJEV: probability the option preserves meaning and claim strength">
+                    meaning {o.meaningPreserved.toFixed(2)}
+                  </span>
+                )}
+                <button type="button" onClick={() => onUse(o.text)} className="ml-auto shrink-0 rounded-[4px] px-1.5 py-0.5 font-medium text-olive-dark hover:bg-olive-pale">
+                  Use this
+                </button>
+              </div>
+            </li>
+          ))}
+          {res.result.rejected.length > 0 && (
+            <li className="text-[11.5px] text-ink-3">
+              {res.result.rejected.length} option{res.result.rejected.length > 1 ? "s" : ""} withheld: {res.result.rejected.map((r) => r.reason).join("; ")}
+            </li>
+          )}
+        </ul>
+      ) : (
+        <p className="mt-1.5 text-[12.5px] text-terra">{res && !res.ok ? res.error.message : "No options."} Nothing was changed.</p>
+      )}
+      {res && <AiTrace response={res} />}
+    </div>
+  );
+}
+
+/** Draft alt text from the figure's data (standard tier, validated, escalates once). */
+function AltTextDraft({ finding: f, candidate: c, figures, caption, model, onDraft }: { finding: FindingState; candidate: Candidate; figures: FigureState; caption: string; model?: string; onDraft: (t: string) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [res, setRes] = useState<AssistResponse | null>(null);
+  const spec = figures[c.figure!.figureId];
+  const draft = async () => {
+    setLoading(true);
+    const r = await requestAssist({ task: "alt_text", findingId: f.id, caption, figure: { xAxisLabel: spec.xAxisLabel, yAxisLabel: spec.yAxisLabel } });
+    setRes(r);
+    setLoading(false);
+    if (r.ok && r.result.task === "alt_text") onDraft(r.result.text);
+  };
+  return (
+    <div className="mt-2">
+      <button type="button" disabled={loading} onClick={draft} className="text-[12px] text-olive-dark underline decoration-olive-soft/70 underline-offset-[3px] hover:text-olive-deep disabled:opacity-50">
+        {loading ? "Drafting…" : "Draft from figure data"}
+      </button>
+      <span className="ml-1.5 text-[11px] text-ink-3">· {model ?? "standard model"}</span>
+      {res && !res.ok && <p className="mt-1 text-[12px] text-terra">{res.error.message}</p>}
+      {res && <AiTrace response={res} />}
+    </div>
+  );
+}
+
+/** Before/after close-ups of the part of the figure that changes. */
+function FigureDiff({ candidate: c, finding: f, figures, replacementLabel }: { candidate: Candidate; finding: FindingState; figures: FigureState; replacementLabel: string }) {
+  const fig = c.figure!;
+  const spec = figures[fig.figureId];
+  const crop = REGION_CROP[spec.kind][fig.region];
+  const applied = f.appliedText !== undefined;
+  const dpi = effectiveDpi(spec);
+
+  if (fig.prop === "altText" || fig.prop === "source") {
+    return (
+      <div className="overflow-hidden rounded-[5px] border border-line-soft bg-paper">
+        <FigureGraphic spec={spec} crop={crop} className="block h-auto w-full" />
+        <div className="border-t border-line-soft px-3 py-2 text-[12.5px] leading-relaxed text-ink-2">
+          {fig.prop === "source" ? (
+            <span className="tabular">
+              {spec.source.format} · {spec.source.pxWidth?.toLocaleString()} × {spec.source.pxHeight?.toLocaleString()} px · printed at {spec.source.printWidthMm} mm ={" "}
+              <span className="font-medium text-terra">{dpi} dpi</span> <span className="text-ink-3">(300 required)</span>
+            </span>
+          ) : (
+            <>
+              <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-[0.11em] text-olive-dark">{applied ? "Alt text" : replacementLabel}</span>
+              <span className="font-serif text-[14.5px] text-ink">{applied ? spec.altText : String(fig.to)}</span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+  const before: FigureSpec = { ...spec, [fig.prop]: fig.from };
+  const after: FigureSpec = { ...spec, [fig.prop]: fig.to };
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {[
+        ["Original", before],
+        [applied ? "Applied" : replacementLabel, after],
+      ].map(([label, sp]) => (
+        <div key={label as string} className="overflow-hidden rounded-[5px] border border-line-soft bg-paper">
+          <span className={`block px-2 pt-1.5 text-[10px] font-medium uppercase tracking-[0.11em] ${label === "Original" ? "text-ink-3" : "text-olive-dark"}`}>{label as string}</span>
+          <FigureGraphic spec={sp as FigureSpec} crop={crop} className="block h-[96px] w-full" />
+        </div>
+      ))}
+      <p className="col-span-2 font-serif text-[14px] text-ink-2">
+        <CompactPreview original={c.original} replacement={c.replacement} />
+      </p>
+    </div>
+  );
+}
+
+/** Before/after of an XML tagging decision. */
+function StructureDiff({ candidate: c, before, after }: { candidate: Candidate; before: string; after: string }) {
+  return (
+    <div className="overflow-hidden rounded-[5px] border border-line-soft bg-paper">
+      <div className="px-3 pb-2 pt-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-[0.11em] text-ink-3">Text</span>
+        <p className="mt-0.5 font-serif text-[15px] leading-[1.55] text-ink-2">
+          {before}
+          <span className="text-ink">{c.original}</span>
+          {after}
+        </p>
+      </div>
+      <div className="border-t border-line-soft px-3 pb-2 pt-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-[0.11em] text-olive-dark">{c.replacement ? "XML" : "XML — cannot link"}</span>
+        <p className="xml-code mt-1 break-words text-[12px] leading-[1.6] text-ink">
+          {c.replacement ? (
+            <>
+              <span className="xml-link text-olive-dark">{`<xref ref-type="${c.structure?.refType}" rid="${c.structure?.rid}">`}</span>
+              <span className="xml-link">{c.original}</span>
+              <span className="xml-link text-olive-dark">{"</xref>"}</span>
+            </>
+          ) : (
+            <span className="text-ink-2">{c.original} <span className="italic text-ink-3">{"<!-- no matching target -->"}</span></span>
+          )}
         </p>
       </div>
     </div>

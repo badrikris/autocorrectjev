@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CANDIDATES } from "@/lib/candidates";
+import { CANDIDATES, kindOf } from "@/lib/candidates";
+import { FIGURES } from "@/lib/figures";
 import { applyExactEdit, createDoc, findOccurrence, mapAnchor } from "@/lib/document";
 import type { OpenJevDecision, Route } from "@/lib/policy";
 import { createReviewState, reviewReducer, summarise, type ReviewAction, type ReviewState } from "@/lib/review";
@@ -25,14 +26,13 @@ function evaluate(s: ReviewState, id: string, d: OpenJevDecision): ReviewState {
 const text = (s: ReviewState, blockId: string) => s.doc.blocks[blockId].text;
 
 describe("prepared data", () => {
-  it("every candidate anchors to its block and has a sample decision", () => {
+  it("every candidate anchors to its target and has a sample decision", () => {
     const doc = createDoc();
     for (const c of CANDIDATES) {
-      expect(findOccurrence(doc.blocks[c.blockId].text, c.original, c.occurrence), c.id).toBeGreaterThanOrEqual(0);
+      if (kindOf(c) === "figure") expect(FIGURES[c.figure!.figureId], c.id).toBeDefined();
+      else expect(findOccurrence(doc.blocks[c.blockId].text, c.original, c.occurrence), c.id).toBeGreaterThanOrEqual(0);
       expect(SAMPLE_DECISIONS[c.id], c.id).toBeDefined();
     }
-    expect(CANDIDATES.length).toBeGreaterThanOrEqual(18);
-    expect(CANDIDATES.length).toBeLessThanOrEqual(22);
   });
 });
 
@@ -209,9 +209,10 @@ describe("summary", () => {
       s = run(s, { type: "evalSuccess", id, attempt: f.attempt, epoch: 0, decision: SAMPLE_DECISIONS[id], source: "sample" });
     }
     const sum = summarise(s);
-    expect(sum.autoHandled).toBe(6);
+    // 6 language fixes + page range + 3 XML links; everything else needs a person or is suppressed.
+    expect(sum.autoHandled).toBe(10);
     expect(sum.suppressed).toBe(5);
-    expect(sum.needsYou).toBe(11);
+    expect(sum.needsYou).toBe(24);
     expect(sum.complete).toBe(false);
     expect(s.openjevConnected).toBe(false);
   });

@@ -9,6 +9,8 @@ export interface EvaluateRequestBody {
   precedingText: string | null;
   followingText: string | null;
   related: { label: string; text: string }[];
+  /** Figure findings: the figure as it currently stands (data, not instructions). */
+  figure?: Record<string, unknown>;
 }
 
 export type OpenJevErrorKind =

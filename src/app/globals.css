@@ -278,6 +278,49 @@ textarea:focus-visible {
     text-decoration-color 450ms var(--ease-apple);
 }
 
+/* Switching between manuscript and XML: a soft cross-fade with a slight rise. */
+.view-enter {
+  animation: view-enter 520ms var(--ease-apple);
+}
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.view-tab {
+  transition:
+    background-color 350ms var(--ease-apple),
+    color 350ms var(--ease-apple),
+    box-shadow 350ms var(--ease-apple);
+}
+
+/* ---------- XML view ---------- */
+.xml-code {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-variant-ligatures: none;
+}
+/* An applied <xref>: the tag and its text sit on a quiet olive wash. */
+.xml-link {
+  background: var(--color-olive-pale);
+}
+.fig-pin {
+  transition:
+    border-color 300ms var(--ease-apple-soft),
+    box-shadow 450ms var(--ease-apple),
+    transform 450ms var(--ease-apple);
+}
+.region-outline {
+  transition: opacity 450ms var(--ease-apple);
+  background: rgba(238, 240, 229, 0.18);
+}
+
 /* Gentle activity pulse for "Evaluating" */
 .pulse-dot {
   animation: pulse-dot 1.4s ease-in-out infinite;

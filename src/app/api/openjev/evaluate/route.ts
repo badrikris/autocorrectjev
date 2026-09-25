@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCandidate } from "@/lib/candidates";
+import { getCandidate, kindOf } from "@/lib/candidates";
 import { callOpenJev, openjevConfigFromEnv } from "@/lib/openjev/client";
 import { buildOpenJevPayload } from "@/lib/openjev/payload";
 import type { EvaluateRequestBody, EvaluateResponseBody } from "@/lib/openjev/types";
@@ -24,7 +24,8 @@ export async function POST(req: Request) {
     return reply({ ok: false, error: { kind: "invalid_request", message: "Missing passage text." } }, 400);
   }
   const at = input.blockText.slice(input.anchorStart, input.anchorStart + candidate.original.length);
-  if (at !== candidate.original) {
+  // Figure findings describe the graphic, not caption text, so there is no text to verify.
+  if (kindOf(candidate) !== "figure" && at !== candidate.original) {
     return reply({ ok: false, error: { kind: "target_mismatch", message: "The original text is not at the expected position." } }, 409);
   }
 
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
       sectionTitle: String(input.sectionTitle ?? ""),
       precedingText: typeof input.precedingText === "string" ? input.precedingText : null,
       followingText: typeof input.followingText === "string" ? input.followingText : null,
+      figure: input.figure && typeof input.figure === "object" ? input.figure : undefined,
       related: Array.isArray(input.related)
         ? input.related.filter((r) => r && typeof r.text === "string").slice(0, 3)
         : [],

@@ -46,6 +46,13 @@ export interface PolicyInput {
   targetValid: boolean;
   /** Who made the decision, for explanations. Sample fixtures must never be called "OpenJEV". */
   decider?: string;
+  /**
+   * For figure and structure findings the caller decides what is protected and whether the
+   * change is mechanical, because `original`/`replacement` describe the change rather than
+   * being manuscript text. Text findings leave these unset.
+   */
+  protectedHits?: ProtectedHit[];
+  mechanical?: boolean;
 }
 
 export interface PolicyCheck {
@@ -79,9 +86,9 @@ const f2 = (n: number | null) => (n === null ? "—" : n.toFixed(2));
 export function routeFinding(input: PolicyInput): PolicyOutcome {
   const { decision: d, replacement } = input;
   const who = input.decider ?? "OpenJEV";
-  const protectedHits = replacement === null ? [] : detectProtectedChanges(input.original, replacement);
+  const protectedHits = input.protectedHits ?? (replacement === null ? [] : detectProtectedChanges(input.original, replacement));
   const shape = replacement === null ? null : mechanicalShape(input.original, replacement);
-  const allowlisted = !!shape && !!MECHANICAL_ALLOWLIST[input.category]?.includes(shape);
+  const allowlisted = input.mechanical ?? (!!shape && !!MECHANICAL_ALLOWLIST[input.category]?.includes(shape));
   const hasTarget = input.targetValid && replacement !== null;
   const noProtected = protectedHits.length === 0;
   const protectedPhrase = protectedHits.map((h) => PROTECTED_KIND_LABEL[h.kind]).filter((v, i, a) => a.indexOf(v) === i).join(", ");

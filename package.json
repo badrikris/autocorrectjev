@@ -1,0 +1,28 @@
+{
+  "name": "edit-copyediting-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Edit — Copyediting, with judgment. A scholarly copyediting prototype with live Jev decisions.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lucide-react": "^1.48.0",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.0",
+    "vitest": "^5.0.2"
+  }
+}

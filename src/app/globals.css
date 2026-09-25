@@ -1,0 +1,279 @@
+@import "tailwindcss";
+
+@theme {
+  --color-olive: #66733a;
+  --color-olive-dark: #465126;
+  --color-olive-deep: #39431f;
+  --color-olive-soft: #a8b080;
+  --color-olive-pale: #eef0e5;
+  --color-olive-wash: #f4f5ee;
+  --color-ivory: #f6f4ec;
+  --color-paper: #fffefa;
+  --color-ink: #25251f;
+  --color-ink-2: #68685e;
+  --color-ink-3: #9a998d;
+  --color-line: #dddccf;
+  --color-line-soft: #e9e7dc;
+
+  /* Suggestion / review — muted amber */
+  --color-amber: #a8792a;
+  --color-amber-line: #c9a15a;
+  --color-amber-pale: #f7efdc;
+  --color-amber-wash: #fbf6ea;
+
+  /* Needs judgment — muted terracotta */
+  --color-terra: #a65a43;
+  --color-terra-line: #c98a74;
+  --color-terra-pale: #f5e5de;
+  --color-terra-wash: #fbf3ef;
+
+  --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --shadow-hair: 0 1px 0 rgba(37, 37, 31, 0.03), 0 1px 3px rgba(37, 37, 31, 0.04);
+  --shadow-pop: 0 1px 2px rgba(37, 37, 31, 0.06), 0 8px 24px -8px rgba(37, 37, 31, 0.14);
+}
+
+html,
+body {
+  background: var(--color-ivory);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #dfe3cb;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-olive);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Text fields carry their own focus ring. */
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Quiet scrollbars */
+.quiet-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #d6d4c6 transparent;
+}
+.quiet-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.quiet-scroll::-webkit-scrollbar-thumb {
+  background: #dcdacd;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ---------- Manuscript typography ---------- */
+.ms-body {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  line-height: 1.72;
+  font-feature-settings: "kern", "liga", "onum";
+  font-optical-sizing: auto;
+  hyphens: auto;
+  text-wrap: pretty;
+  color: #23231d;
+}
+
+/* ---------- Manuscript highlights ---------- */
+.hl {
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 160ms ease, box-shadow 160ms ease, text-decoration-color 160ms ease;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Auto-applied: very pale olive with a small change marker */
+.hl-auto {
+  background: var(--color-olive-pale);
+  box-shadow: 0 0 0 1px var(--color-olive-pale);
+}
+.hl-auto::after,
+.hl-kept::after,
+.hl-applied::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: var(--color-olive);
+  vertical-align: super;
+  opacity: 0.85;
+}
+.hl-kept {
+  background: transparent;
+}
+.hl-kept::after {
+  opacity: 0.45;
+}
+.hl-applied {
+  background: transparent;
+  text-decoration: underline;
+  text-decoration-color: var(--color-olive-soft);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.hl-applied::after {
+  opacity: 0.55;
+}
+
+/* Suggested: restrained amber underline */
+.hl-suggest {
+  text-decoration: underline;
+  text-decoration-color: var(--color-amber-line);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.hl-suggest:hover {
+  background: var(--color-amber-wash);
+}
+
+/* Needs judgment: restrained terracotta underline (+ margin marker) */
+.hl-manual {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--color-terra-line);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.hl-manual:hover {
+  background: var(--color-terra-wash);
+}
+
+/* Pending / stale / failed: neutral */
+.hl-pending {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: #c9c7b8;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+}
+.hl-auto:hover,
+.hl-kept:hover,
+.hl-applied:hover {
+  background: #e6e9d8;
+}
+
+/* Only the selected finding receives strong emphasis */
+.hl-selected.hl-auto,
+.hl-selected.hl-kept,
+.hl-selected.hl-applied {
+  background: #dfe4c9;
+  box-shadow: 0 0 0 2px #dfe4c9;
+}
+.hl-selected.hl-suggest {
+  background: var(--color-amber-pale);
+  box-shadow: 0 0 0 2px var(--color-amber-pale);
+  text-decoration-color: var(--color-amber);
+}
+.hl-selected.hl-manual {
+  background: var(--color-terra-pale);
+  box-shadow: 0 0 0 2px var(--color-terra-pale);
+  text-decoration-color: var(--color-terra);
+}
+.hl-selected.hl-pending {
+  background: #efeee6;
+  box-shadow: 0 0 0 2px #efeee6;
+}
+
+.hl-flash {
+  animation: hl-flash 1100ms ease-out;
+}
+@keyframes hl-flash {
+  0% {
+    box-shadow: 0 0 0 2px rgba(102, 115, 58, 0), 0 0 0 0 rgba(102, 115, 58, 0.35);
+  }
+  25% {
+    box-shadow: 0 0 0 2px rgba(102, 115, 58, 0.45), 0 0 0 6px rgba(102, 115, 58, 0.12);
+  }
+  100% {
+    box-shadow: 0 0 0 2px rgba(102, 115, 58, 0), 0 0 0 10px rgba(102, 115, 58, 0);
+  }
+}
+
+.ws-mark {
+  font-family: var(--font-sans);
+  font-size: 0.72em;
+  color: var(--color-ink-3);
+  letter-spacing: 0.08em;
+}
+
+/* Gentle activity pulse for "Evaluating" */
+.pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.progress-indeterminate {
+  background: linear-gradient(90deg, transparent 0%, var(--color-olive-soft) 50%, transparent 100%);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: progress-slide 1.6s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0% {
+    background-position: -40% 0;
+  }
+  100% {
+    background-position: 140% 0;
+  }
+}
+
+.card-enter {
+  animation: card-enter 220ms ease-out;
+}
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-in {
+  animation: fade-in 180ms ease-out;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

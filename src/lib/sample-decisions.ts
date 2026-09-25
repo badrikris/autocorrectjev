@@ -1,19 +1,19 @@
 /**
  * SAMPLE decisions for preview mode only (no API key).
  *
- * These are hand-written, deterministic fixture values. They are NOT Jev
+ * These are hand-written, deterministic fixture values. They are NOT OpenJEV
  * output and must always be presented as sample data. They pass through the
  * same routing policy as live decisions so the review experience is identical.
  */
-import type { JevDecision, Route } from "./policy";
+import type { OpenJevDecision, Route } from "./policy";
 
-function d(route: Route, probs: [number, number, number, number], findingValid: number, meaningPreserved: number | null): JevDecision {
+function d(route: Route, probs: [number, number, number, number], findingValid: number, meaningPreserved: number | null): OpenJevDecision {
   const [a, s, m, n] = probs;
   const routeProbabilities = { AUTO_APPLY: a, SUGGEST: s, MANUAL_REVIEW: m, NO_CHANGE: n };
   return { route, routeConfidence: routeProbabilities[route], routeProbabilities, findingValid, meaningPreserved };
 }
 
-export const SAMPLE_DECISIONS: Record<string, JevDecision> = {
+export const SAMPLE_DECISIONS: Record<string, OpenJevDecision> = {
   f01: d("AUTO_APPLY", [0.98, 0.015, 0.003, 0.002], 0.99, 0.995),
   f02: d("MANUAL_REVIEW", [0.01, 0.04, 0.84, 0.11], 0.31, 0.04),
   f03: d("AUTO_APPLY", [0.99, 0.008, 0.001, 0.001], 0.99, 0.999),

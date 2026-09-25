@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { routeFinding, type JevDecision, type Route } from "@/lib/policy";
+import { routeFinding, type OpenJevDecision, type Route } from "@/lib/policy";
 import { detectProtectedChanges, mechanicalShape } from "@/lib/protected";
 
-function decision(route: Route, conf: number, valid: number, meaning: number | null): JevDecision {
+function decision(route: Route, conf: number, valid: number, meaning: number | null): OpenJevDecision {
   const rest = (1 - conf) / 3;
   const routeProbabilities = { AUTO_APPLY: rest, SUGGEST: rest, MANUAL_REVIEW: rest, NO_CHANGE: rest };
   routeProbabilities[route] = conf;
@@ -12,7 +12,7 @@ function decision(route: Route, conf: number, valid: number, meaning: number | n
 const typo = { category: "typo" as const, original: "teh", replacement: "the", targetValid: true };
 
 describe("routing policy", () => {
-  it("auto-applies a mechanical typo when Jev is confident", () => {
+  it("auto-applies a mechanical typo when OpenJEV is confident", () => {
     const out = routeFinding({ ...typo, decision: decision("AUTO_APPLY", 0.97, 0.99, 0.995) });
     expect(out.treatment).toBe("AUTO_APPLY");
     expect(out.adjusted).toBe(false);
@@ -22,7 +22,7 @@ describe("routing policy", () => {
     const out = routeFinding({ ...typo, decision: decision("AUTO_APPLY", 0.9, 0.99, 0.99) });
     expect(out.treatment).toBe("SUGGEST");
     expect(out.adjusted).toBe(true);
-    expect(out.summary).toMatch(/Jev proposed automatic correction/);
+    expect(out.summary).toMatch(/OpenJEV proposed automatic correction/);
   });
 
   it("downgrades AUTO_APPLY to SUGGEST when meaning_preserved < 0.98", () => {

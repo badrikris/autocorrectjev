@@ -3,7 +3,7 @@
  *
  * Invariants:
  *  - Text changes only through applyExactEdit / applyManualBlockEdit (verified, offset-anchored).
- *  - A Jev result is applied only if the passage has not been freely edited since
+ *  - An OpenJEV result is applied only if the passage has not been freely edited since
  *    the request (editEpoch) and it answers the latest request for that finding (attempt).
  *  - Every automatic edit keeps what is needed to undo it.
  */
@@ -20,8 +20,8 @@ import {
   type ChangeRegion,
   type DocState,
 } from "./document";
-import type { JevError, JevTechnical } from "./jev/types";
-import { routeFinding, type JevDecision, type PolicyOutcome, type Route } from "./policy";
+import type { OpenJevError, OpenJevTechnical } from "./openjev/types";
+import { routeFinding, type OpenJevDecision, type PolicyOutcome, type Route } from "./policy";
 
 export type EvalStatus = "idle" | "waiting" | "evaluating" | "evaluated" | "failed" | "stale";
 export type Resolution =
@@ -47,11 +47,11 @@ export interface FindingState {
   attempt: number;
   /** editEpoch of the block when the current request was made. */
   requestEpoch?: number;
-  error?: JevError;
-  decision?: JevDecision;
+  error?: OpenJevError;
+  decision?: OpenJevDecision;
   outcome?: PolicyOutcome;
   source?: DecisionSource;
-  technical?: JevTechnical;
+  technical?: OpenJevTechnical;
   resolution: Resolution;
   /** The text this finding put into the manuscript, if applied. */
   appliedText?: string;
@@ -65,9 +65,9 @@ export interface ReviewState {
   doc: DocState;
   findings: Record<string, FindingState>;
   mode: ReviewMode;
-  /** True only after at least one successful live Jev response. */
-  jevConnected: boolean;
-  lastLiveError?: JevError;
+  /** True only after at least one successful live OpenJEV response. */
+  openjevConnected: boolean;
+  lastLiveError?: OpenJevError;
   /** Monotonic counter for human actions; used for UI transitions. */
   actionSeq: number;
 }
@@ -76,8 +76,8 @@ export type ReviewAction =
   | { type: "start"; mode: "live" | "preview" }
   | { type: "queue"; ids: string[] }
   | { type: "evalStart"; id: string }
-  | { type: "evalSuccess"; id: string; attempt: number; epoch: number; decision: JevDecision; source: DecisionSource; technical?: JevTechnical }
-  | { type: "evalFailure"; id: string; attempt: number; epoch: number; error: JevError }
+  | { type: "evalSuccess"; id: string; attempt: number; epoch: number; decision: OpenJevDecision; source: DecisionSource; technical?: OpenJevTechnical }
+  | { type: "evalFailure"; id: string; attempt: number; epoch: number; error: OpenJevError }
   | { type: "keep"; id: string }
   | { type: "undo"; id: string }
   | { type: "apply"; id: string; text?: string }
@@ -111,7 +111,7 @@ export function createReviewState(candidates: Candidate[] = CANDIDATES, doc: Doc
       query: c.authorQuery,
     };
   }
-  return { doc, findings, mode: "idle", jevConnected: false, actionSeq: 0 };
+  return { doc, findings, mode: "idle", openjevConnected: false, actionSeq: 0 };
 }
 
 /** Move every other finding's anchor across a change in the same block. */
@@ -167,15 +167,15 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
       const f = state.findings[action.id];
       // Only the latest in-flight request for this finding may answer.
       if (!f || f.attempt !== action.attempt || f.status !== "evaluating") return state;
-      const connected = state.jevConnected || action.source === "live";
-      const base = { ...state, jevConnected: connected, lastLiveError: action.source === "live" ? undefined : state.lastLiveError };
+      const connected = state.openjevConnected || action.source === "live";
+      const base = { ...state, openjevConnected: connected, lastLiveError: action.source === "live" ? undefined : state.lastLiveError };
       if (f.resolution !== "open") return base;
       if (!f.anchor) return base;
       const block = state.doc.blocks[f.anchor.blockId];
       if (block.editEpoch !== action.epoch) {
         return update(base, f.id, {
           status: "stale",
-          note: "The passage was edited while Jev was evaluating, so that decision was discarded.",
+          note: "The passage was edited while OpenJEV was evaluating, so that decision was discarded.",
         });
       }
       const c = candidateOf(f.id);
@@ -186,7 +186,7 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
         original: c.original,
         replacement: c.replacement,
         targetValid,
-        decider: action.source === "sample" ? "The sample decision" : "Jev",
+        decider: action.source === "sample" ? "The sample decision" : "OpenJEV",
       });
       const evaluated: Partial<FindingState> = {
         status: "evaluated",

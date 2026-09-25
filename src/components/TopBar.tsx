@@ -4,7 +4,7 @@ import { Ellipsis, RotateCcw, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MANUSCRIPT_META } from "@/lib/manuscript";
 
-export type JevIndicator =
+export type OpenJevIndicator =
   | { kind: "checking" }
   | { kind: "not_configured" }
   | { kind: "configured" }
@@ -13,7 +13,7 @@ export type JevIndicator =
   | { kind: "preview" };
 
 interface Props {
-  indicator: JevIndicator;
+  indicator: OpenJevIndicator;
   started: boolean;
   progress: { done: number; total: number; pending: number; needsYou: number; auto: number; complete: boolean };
   onStart: () => void;
@@ -138,14 +138,14 @@ function MenuItem({ children, icon, onClick }: { children: React.ReactNode; icon
   );
 }
 
-function Indicator({ indicator }: { indicator: JevIndicator }) {
-  const map: Record<JevIndicator["kind"], { dot: string; text: string; cls: string; title: string }> = {
-    checking: { dot: "border border-ink-3", text: "Checking Jev…", cls: "text-ink-3", title: "Checking server configuration" },
-    not_configured: { dot: "border border-ink-3", text: "Jev not configured", cls: "text-ink-2", title: "No TYPESAFE_API_KEY on the server" },
-    configured: { dot: "border-[1.5px] border-olive", text: "Jev configured", cls: "text-ink-2", title: "API key present; no successful request yet" },
-    connected: { dot: "bg-olive", text: "Jev connected", cls: "text-olive-dark", title: "At least one live Jev request succeeded" },
-    error: { dot: "bg-terra-line", text: indicator.kind === "error" ? indicator.text : "", cls: "text-terra", title: "Live Jev requests are failing" },
-    preview: { dot: "bg-amber-line", text: "Sample decisions · Jev not connected", cls: "text-amber", title: "Preview mode with fixture data" },
+function Indicator({ indicator }: { indicator: OpenJevIndicator }) {
+  const map: Record<OpenJevIndicator["kind"], { dot: string; text: string; cls: string; title: string }> = {
+    checking: { dot: "border border-ink-3", text: "Checking OpenJEV…", cls: "text-ink-3", title: "Checking server configuration" },
+    not_configured: { dot: "border border-ink-3", text: "OpenJEV not configured", cls: "text-ink-2", title: "No OPENJEV_API_KEY on the server" },
+    configured: { dot: "border-[1.5px] border-olive", text: "OpenJEV configured", cls: "text-ink-2", title: "API key present; no successful request yet" },
+    connected: { dot: "bg-olive", text: "OpenJEV connected", cls: "text-olive-dark", title: "At least one live OpenJEV request succeeded" },
+    error: { dot: "bg-terra-line", text: indicator.kind === "error" ? indicator.text : "", cls: "text-terra", title: "Live OpenJEV requests are failing" },
+    preview: { dot: "bg-amber-line", text: "Sample decisions · OpenJEV not connected", cls: "text-amber", title: "Preview mode with fixture data" },
   };
   const m = map[indicator.kind];
   return (

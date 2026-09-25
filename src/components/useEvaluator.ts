@@ -2,12 +2,12 @@
 
 /**
  * Evaluation queue. Sends each prepared candidate to our server route
- * (which calls Jev) with bounded concurrency, visible passages first.
+ * (which calls OpenJEV) with bounded concurrency, visible passages first.
  * Scrolling never triggers requests; it only changes priority for queued items.
  */
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject } from "react";
 import { candidateOf, sortedFindings, type ReviewAction, type ReviewState } from "@/lib/review";
-import type { EvaluateRequestBody, EvaluateResponseBody } from "@/lib/jev/types";
+import type { EvaluateRequestBody, EvaluateResponseBody } from "@/lib/openjev/types";
 import { sectionTitle } from "@/lib/manuscript";
 import { SAMPLE_DECISIONS } from "@/lib/sample-decisions";
 
@@ -64,7 +64,7 @@ export function useEvaluator(
       inflight.current.add(id);
       dispatch({ type: "evalStart", id });
       try {
-        const res = await fetch("/api/jev/evaluate", {
+        const res = await fetch("/api/openjev/evaluate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

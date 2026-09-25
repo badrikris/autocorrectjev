@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { CANDIDATES } from "@/lib/candidates";
 import { applyExactEdit, createDoc, findOccurrence, mapAnchor } from "@/lib/document";
-import type { JevDecision, Route } from "@/lib/policy";
+import type { OpenJevDecision, Route } from "@/lib/policy";
 import { createReviewState, reviewReducer, summarise, type ReviewAction, type ReviewState } from "@/lib/review";
 import { SAMPLE_DECISIONS } from "@/lib/sample-decisions";
 
-function decision(route: Route, conf = 0.99, valid = 0.99, meaning: number | null = 0.999): JevDecision {
+function decision(route: Route, conf = 0.99, valid = 0.99, meaning: number | null = 0.999): OpenJevDecision {
   const rest = (1 - conf) / 3;
   const p = { AUTO_APPLY: rest, SUGGEST: rest, MANUAL_REVIEW: rest, NO_CHANGE: rest };
   p[route] = conf;
@@ -15,7 +15,7 @@ function decision(route: Route, conf = 0.99, valid = 0.99, meaning: number | nul
 const run = (s: ReviewState, ...actions: ReviewAction[]) => actions.reduce(reviewReducer, s);
 
 /** Start + succeed one evaluation, as the evaluation queue does. */
-function evaluate(s: ReviewState, id: string, d: JevDecision): ReviewState {
+function evaluate(s: ReviewState, id: string, d: OpenJevDecision): ReviewState {
   s = run(s, { type: "queue", ids: [id] }, { type: "evalStart", id });
   const f = s.findings[id];
   const epoch = s.doc.blocks[f.anchor!.blockId].editEpoch;
@@ -104,7 +104,7 @@ describe("auto-apply and undo", () => {
     expect(s.findings.f01.resolution).toBe("undone");
   });
 
-  it("a meaning-sensitive edit is never auto-applied, even if Jev says AUTO_APPLY", () => {
+  it("a meaning-sensitive edit is never auto-applied, even if OpenJEV says AUTO_APPLY", () => {
     let s = createReviewState();
     const original = text(s, "abs-1");
     s = evaluate(s, "f02", decision("AUTO_APPLY", 1, 1, 1));
@@ -139,7 +139,7 @@ describe("auto-apply and undo", () => {
 });
 
 describe("stale result handling", () => {
-  it("a Jev response that arrives after a manual edit is discarded, never applied", () => {
+  it("an OpenJEV response that arrives after a manual edit is discarded, never applied", () => {
     let s = createReviewState();
     s = run(s, { type: "queue", ids: ["f01"] }, { type: "evalStart", id: "f01" });
     const { attempt } = s.findings.f01;
@@ -195,7 +195,7 @@ describe("stale result handling", () => {
     expect(s.findings.f01.status).toBe("failed");
     expect(s.findings.f01.outcome).toBeUndefined();
     expect(s.doc.blocks).toEqual(before.blocks);
-    expect(s.jevConnected).toBe(false);
+    expect(s.openjevConnected).toBe(false);
   });
 });
 
@@ -213,6 +213,6 @@ describe("summary", () => {
     expect(sum.suppressed).toBe(5);
     expect(sum.needsYou).toBe(11);
     expect(sum.complete).toBe(false);
-    expect(s.jevConnected).toBe(false);
+    expect(s.openjevConnected).toBe(false);
   });
 });

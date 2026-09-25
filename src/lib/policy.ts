@@ -1,7 +1,7 @@
 /**
  * Routing policy.
  *
- * Jev provides the judgment; this function provides conservative safety
+ * OpenJEV provides the judgment; this function provides conservative safety
  * boundaries around it. Thresholds are illustrative prototype values, NOT
  * validated production thresholds.
  */
@@ -11,11 +11,11 @@ import { detectProtectedChanges, mechanicalShape, PROTECTED_KIND_LABEL, type Mec
 export const ROUTES = ["AUTO_APPLY", "SUGGEST", "MANUAL_REVIEW", "NO_CHANGE"] as const;
 export type Route = (typeof ROUTES)[number];
 
-export interface JevDecision {
+export interface OpenJevDecision {
   route: Route;
-  /** Choice confidence reported by Jev for the selected route. */
+  /** Choice confidence reported by OpenJEV for the selected route. */
   routeConfidence: number;
-  /** Per-label probabilities reported by Jev. */
+  /** Per-label probabilities reported by OpenJEV. */
   routeProbabilities: Record<Route, number>;
   /** Noul: probability the finding is legitimate. */
   findingValid: number;
@@ -38,13 +38,13 @@ export const MECHANICAL_ALLOWLIST: Partial<Record<CandidateCategory, MechanicalS
 };
 
 export interface PolicyInput {
-  decision: JevDecision;
+  decision: OpenJevDecision;
   category: CandidateCategory;
   original: string;
   replacement: string | null;
   /** The exact original text is still present at the anchor. */
   targetValid: boolean;
-  /** Who made the decision, for explanations. Sample fixtures must never be called "Jev". */
+  /** Who made the decision, for explanations. Sample fixtures must never be called "OpenJEV". */
   decider?: string;
 }
 
@@ -58,12 +58,12 @@ export interface PolicyCheck {
 
 export interface PolicyOutcome {
   treatment: Route;
-  jevRoute: Route;
-  /** True when the application's safety rules changed Jev's proposed route. */
+  openjevRoute: Route;
+  /** True when the application's safety rules changed OpenJEV's proposed route. */
   adjusted: boolean;
   checks: PolicyCheck[];
   protectedHits: ProtectedHit[];
-  /** Application-authored explanation (never attributed to Jev). */
+  /** Application-authored explanation (never attributed to OpenJEV). */
   summary: string;
 }
 
@@ -78,7 +78,7 @@ const f2 = (n: number | null) => (n === null ? "—" : n.toFixed(2));
 
 export function routeFinding(input: PolicyInput): PolicyOutcome {
   const { decision: d, replacement } = input;
-  const who = input.decider ?? "Jev";
+  const who = input.decider ?? "OpenJEV";
   const protectedHits = replacement === null ? [] : detectProtectedChanges(input.original, replacement);
   const shape = replacement === null ? null : mechanicalShape(input.original, replacement);
   const allowlisted = !!shape && !!MECHANICAL_ALLOWLIST[input.category]?.includes(shape);
@@ -88,7 +88,7 @@ export function routeFinding(input: PolicyInput): PolicyOutcome {
 
   const outcome = (treatment: Route, checks: PolicyCheck[], summary: string): PolicyOutcome => ({
     treatment,
-    jevRoute: d.route,
+    openjevRoute: d.route,
     adjusted: treatment !== d.route,
     checks,
     protectedHits,
@@ -153,13 +153,13 @@ export function routeFinding(input: PolicyInput): PolicyOutcome {
   return outcome("MANUAL_REVIEW", checks, `${who} proposed ${proposed}, but ${describeFailure(failed?.id, d)}, so the prototype requires editorial review.`);
 }
 
-function autoFailureReason(checks: PolicyCheck[], d: JevDecision, allowlisted: boolean, category: CandidateCategory): string {
+function autoFailureReason(checks: PolicyCheck[], d: OpenJevDecision, allowlisted: boolean, category: CandidateCategory): string {
   if (!allowlisted) return `a ${category.replace(/_/g, " ")} change is not on the narrow mechanical allowlist`;
   const failed = checks.find((c) => !c.passed);
   return describeFailure(failed?.id, d);
 }
 
-function describeFailure(id: string | undefined, d: JevDecision): string {
+function describeFailure(id: string | undefined, d: OpenJevDecision): string {
   switch (id) {
     case "auto-conf":
       return `routing confidence (${f2(d.routeConfidence)}) is below the ${THRESHOLDS.auto.routeConfidence} auto-apply threshold`;

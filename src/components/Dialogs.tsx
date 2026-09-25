@@ -116,9 +116,9 @@ export function SettingsDialog({
         <h3 className="mb-2 text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Decisions</h3>
         {row("Server API key", configured === null ? "Checking…" : configured ? "Configured (never sent to the browser)" : "Not configured")}
         {row("Model", <span className="tabular">{model}</span>)}
-        {row("Current mode", mode === "idle" ? "Not started" : mode === "live" ? "Live Jev decisions" : "Sample decisions · Jev not connected")}
+        {row("Current mode", mode === "idle" ? "Not started" : mode === "live" ? "Live OpenJEV decisions" : "Sample decisions · OpenJEV not connected")}
         {row("Candidate edits", "Prepared in advance (original, replacement, explanation, optional author query)")}
-        {row("Routing", "Jev’s live answers, bounded by the application’s safety policy")}
+        {row("Routing", "OpenJEV’s live answers, bounded by the application’s safety policy")}
         {mode === "idle" && (
           <div className="mt-3 flex items-center gap-3 rounded-md bg-ivory px-3 py-2.5 text-[12px] text-ink-2">
             <span className="flex-1">Explore the interface without an API key using deterministic sample data, clearly labelled as such.</span>
@@ -165,7 +165,7 @@ export function SettingsDialog({
         </table>
         <p className="mt-2.5 text-[12px] leading-relaxed text-ink-2">
           Auto-apply also requires a mechanical change (ordinary typo, duplicate whitespace, mechanical punctuation, or defined style normalisation), a verified target, and no change to
-          protected content: numbers, units, statistics, negation, association vs causation, claim strength, terminology, names, quotations or citations. Jev’s manual-review decisions are never
+          protected content: numbers, units, statistics, negation, association vs causation, claim strength, terminology, names, quotations or citations. OpenJEV’s manual-review decisions are never
           upgraded.
         </p>
       </section>

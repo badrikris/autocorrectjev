@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCandidate } from "@/lib/candidates";
-import { callJev, jevConfigFromEnv } from "@/lib/jev/client";
-import { buildJevPayload } from "@/lib/jev/payload";
-import type { EvaluateRequestBody, EvaluateResponseBody } from "@/lib/jev/types";
+import { callOpenJev, openjevConfigFromEnv } from "@/lib/openjev/client";
+import { buildOpenJevPayload } from "@/lib/openjev/payload";
+import type { EvaluateRequestBody, EvaluateResponseBody } from "@/lib/openjev/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +28,12 @@ export async function POST(req: Request) {
     return reply({ ok: false, error: { kind: "target_mismatch", message: "The original text is not at the expected position." } }, 409);
   }
 
-  const config = jevConfigFromEnv();
+  const config = openjevConfigFromEnv();
   if (!config.apiKey) {
-    return reply({ ok: false, error: { kind: "not_configured", message: "TYPESAFE_API_KEY is not set on the server." } }, 503);
+    return reply({ ok: false, error: { kind: "not_configured", message: "OPENJEV_API_KEY is not set on the server." } }, 503);
   }
 
-  const payload = buildJevPayload(
+  const payload = buildOpenJevPayload(
     candidate,
     {
       blockText: input.blockText,
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     config.model,
   );
 
-  const result = await callJev(payload, config);
+  const result = await callOpenJev(payload, config);
   if (!result.ok) return reply({ ok: false, error: result.error }, 502);
   return reply({ ok: true, decision: result.decision, technical: result.technical });
 }

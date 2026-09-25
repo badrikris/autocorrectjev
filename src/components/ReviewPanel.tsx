@@ -91,7 +91,7 @@ export function ReviewPanel(p: Props) {
       {state.mode === "live" && summary.pending > 0 && (
         <div className="px-5 pt-3">
           <div className="flex items-center justify-between text-[11.5px] text-ink-2">
-            <span>Jev is evaluating prepared candidates</span>
+            <span>OpenJEV is evaluating prepared candidates</span>
             <span className="tabular">
               {done} of {summary.total}
             </span>
@@ -117,7 +117,7 @@ export function ReviewPanel(p: Props) {
       {state.mode === "preview" && (
         <div className="mx-5 mt-3 flex items-center gap-2 rounded-[5px] border border-amber-line/40 bg-amber-wash px-2.5 py-1.5 text-[11.5px] text-amber">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-line" />
-          Sample decisions · Jev not connected
+          Sample decisions · OpenJEV not connected
         </div>
       )}
 
@@ -176,7 +176,7 @@ export function ReviewPanel(p: Props) {
                   className="flex w-full items-center gap-1.5 text-left text-[12px] text-ink-3 hover:text-ink-2"
                 >
                   <ChevronDown size={13} className={`transition-transform ${showSuppressed ? "" : "-rotate-90"}`} />
-                  {suppressed.length} proposed edit{suppressed.length > 1 ? "s" : ""} not shown — Jev judged {suppressed.length > 1 ? "them" : "it"} unnecessary
+                  {suppressed.length} proposed edit{suppressed.length > 1 ? "s" : ""} not shown — OpenJEV judged {suppressed.length > 1 ? "them" : "it"} unnecessary
                 </button>
                 {showSuppressed && (
                   <div className="mt-2 space-y-2">
@@ -202,7 +202,7 @@ export function ReviewPanel(p: Props) {
       </div>
 
       <footer className="border-t border-line px-5 py-3 text-[11px] leading-relaxed text-ink-3">
-        <p className="text-ink-2">Prepared suggestions · Live Jev decisions</p>
+        <p className="text-ink-2">Prepared suggestions · Live OpenJEV decisions</p>
         <p>Model confidence is not a guarantee of editorial correctness.</p>
       </footer>
     </aside>
@@ -219,7 +219,7 @@ function IntroState({ onStart, canStart, total }: { onStart: () => void; canStar
     <div className="pt-6">
       <p className="font-serif text-[18px] leading-snug text-ink">Read first. Review when you’re ready.</p>
       <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
-        {total} candidate edits have been prepared for this manuscript. Start review and Jev will judge each one: routine corrections are applied for you and marked, likely
+        {total} candidate edits have been prepared for this manuscript. Start review and OpenJEV will judge each one: routine corrections are applied for you and marked, likely
         improvements wait for your approval, and anything that could change meaning is left for your judgment.
       </p>
       <ul className="mt-4 space-y-2 text-[12.5px] text-ink-2">

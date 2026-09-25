@@ -9,7 +9,7 @@ export interface Block extends BlockDef {
   revision: number;
   /**
    * Bumped only when a person rewrites the block freely ("Edit passage").
-   * Jev results requested under an older epoch are stale.
+   * OpenJEV results requested under an older epoch are stale.
    */
   editEpoch: number;
 }

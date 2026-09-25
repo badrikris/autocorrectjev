@@ -1,11 +1,11 @@
 /**
- * Server-side Jev HTTP client. Never import this from client components:
- * it reads TYPESAFE_API_KEY.
+ * Server-side OpenJEV HTTP client. Never import this from client components:
+ * it reads OPENJEV_API_KEY.
  */
-import { ROUTES, type JevDecision, type Route } from "../policy";
-import type { JevError, JevErrorKind, JevTechnical } from "./types";
+import { ROUTES, type OpenJevDecision, type Route } from "../policy";
+import type { OpenJevError, OpenJevErrorKind, OpenJevTechnical } from "./types";
 
-export interface JevConfig {
+export interface OpenJevConfig {
   apiKey: string | undefined;
   model: string;
   baseURL: string;
@@ -15,18 +15,18 @@ export interface JevConfig {
   retryDelayMs?: number;
 }
 
-export function jevConfigFromEnv(): JevConfig {
+export function openjevConfigFromEnv(): OpenJevConfig {
   return {
-    apiKey: process.env.TYPESAFE_API_KEY?.trim() || undefined,
-    model: process.env.JEV_MODEL?.trim() || "jev-latest",
-    baseURL: (process.env.TYPESAFE_BASE_URL?.trim() || "https://api.typesafe.ai").replace(/\/+$/, ""),
+    apiKey: process.env.OPENJEV_API_KEY?.trim() || undefined,
+    model: process.env.OPENJEV_MODEL?.trim() || "openjev",
+    baseURL: (process.env.OPENJEV_BASE_URL?.trim() || "https://api.openjev.sh").replace(/\/+$/, ""),
     timeoutMs: 20_000,
   };
 }
 
-export type JevCallResult =
-  | { ok: true; decision: JevDecision; technical: JevTechnical }
-  | { ok: false; error: JevError; technical?: Partial<JevTechnical> };
+export type OpenJevCallResult =
+  | { ok: true; decision: OpenJevDecision; technical: OpenJevTechnical }
+  | { ok: false; error: OpenJevError; technical?: Partial<OpenJevTechnical> };
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isProb = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
@@ -37,7 +37,7 @@ const isProb = (v: unknown): v is number => typeof v === "number" && Number.isFi
  *                       finding_valid: {type:"noul", noul}, meaning_preserved?: {type:"noul", noul} }, usage }
  * Returns null when anything required is missing or out of range. Never fills gaps.
  */
-export function parseJevResponse(body: unknown, expectMeaning: boolean): JevDecision | null {
+export function parseOpenJevResponse(body: unknown, expectMeaning: boolean): OpenJevDecision | null {
   if (!isRecord(body) || !isRecord(body.answers)) return null;
   const { route, finding_valid, meaning_preserved } = body.answers as Record<string, unknown>;
   if (!isRecord(route) || route.type !== "choice") return null;
@@ -64,7 +64,7 @@ export function parseJevResponse(body: unknown, expectMeaning: boolean): JevDeci
   };
 }
 
-function kindForStatus(status: number): JevErrorKind {
+function kindForStatus(status: number): OpenJevErrorKind {
   if (status === 401 || status === 403) return "auth";
   if (status === 429) return "rate_limited";
   if (status === 408) return "timeout";
@@ -97,15 +97,15 @@ async function readBody(res: Response): Promise<unknown> {
  * One evaluation. At most one retry, and only for transient failures
  * (429, 5xx, connection errors). Timeouts are not retried.
  */
-export async function callJev(payload: { model: string; questions: Record<string, unknown> } & Record<string, unknown>, config: JevConfig): Promise<JevCallResult> {
+export async function callOpenJev(payload: { model: string; questions: Record<string, unknown> } & Record<string, unknown>, config: OpenJevConfig): Promise<OpenJevCallResult> {
   if (!config.apiKey) {
-    return { ok: false, error: { kind: "not_configured", message: "TYPESAFE_API_KEY is not set." } };
+    return { ok: false, error: { kind: "not_configured", message: "OPENJEV_API_KEY is not set." } };
   }
   const doFetch = config.fetchImpl ?? fetch;
   const expectMeaning = "meaning_preserved" in payload.questions;
   const url = `${config.baseURL}/v1/systemone`;
 
-  let lastError: JevError | null = null;
+  let lastError: OpenJevError | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const started = Date.now();
     const controller = new AbortController();
@@ -138,7 +138,7 @@ export async function callJev(payload: { model: string; questions: Record<string
       return { ok: false, error: lastError };
     }
     clearTimeout(timer);
-    const requestId = res.headers.get("x-typesafe-request-id") ?? undefined;
+    const requestId = res.headers.get("x-request-id") ?? undefined;
     const latencyMs = Date.now() - started;
 
     if (!res.ok) {
@@ -152,12 +152,12 @@ export async function callJev(payload: { model: string; questions: Record<string
       return { ok: false, error: lastError, technical: { request: payload, response: body, requestId, latencyMs } };
     }
 
-    const decision = parseJevResponse(body, expectMeaning);
-    const technical: JevTechnical = {
+    const decision = parseOpenJevResponse(body, expectMeaning);
+    const technical: OpenJevTechnical = {
       model: isRecord(body) && typeof body.model === "string" ? body.model : payload.model,
       requestId,
       latencyMs,
-      usage: isRecord(body) && isRecord(body.usage) ? (body.usage as JevTechnical["usage"]) : undefined,
+      usage: isRecord(body) && isRecord(body.usage) ? (body.usage as OpenJevTechnical["usage"]) : undefined,
       request: payload,
       response: body,
     };

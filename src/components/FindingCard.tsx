@@ -4,7 +4,7 @@ import { Check, ChevronDown, FileQuestion, PenLine, RotateCw, Undo2, X } from "l
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Candidate } from "@/lib/candidates";
 import { wordDiff } from "@/lib/diff";
-import { ERROR_COPY } from "@/lib/jev/types";
+import { ERROR_COPY } from "@/lib/openjev/types";
 import { ROUTES } from "@/lib/policy";
 import { contextAround, ROUTE_LABEL, statusLabel, TONE_DOT, TONE_TEXT } from "@/lib/present";
 import { treatmentOf, type FindingState } from "@/lib/review";
@@ -109,7 +109,7 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
 
           {f.resolution === "applied_edited" && (
             <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
-              Your wording was applied as a human-authored edit. Jev evaluated the original suggestion, not this text.
+              Your wording was applied as a human-authored edit. OpenJEV evaluated the original suggestion, not this text.
             </p>
           )}
           {f.note && <p className="mt-2 text-[12.5px] leading-relaxed text-terra">{f.note}</p>}
@@ -141,7 +141,7 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
                 }}
                 className="block w-full resize-y rounded-[5px] border border-line bg-paper px-2.5 py-1.5 font-serif text-[15px] leading-snug text-ink outline-none focus:border-olive-soft focus:ring-2 focus:ring-olive-pale"
               />
-              <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">Applied as your edit, not as a Jev-approved suggestion.</p>
+              <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">Applied as your edit, not as an OpenJEV-approved suggestion.</p>
             </div>
           )}
 
@@ -171,7 +171,7 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
       return (
         <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
           <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-olive" />
-          {f.status === "evaluating" ? "Jev is evaluating this finding…" : "Waiting for evaluation"}
+          {f.status === "evaluating" ? "OpenJEV is evaluating this finding…" : "Waiting for evaluation"}
         </span>
       );
     }
@@ -390,17 +390,17 @@ function WhyTreatment({ finding: f }: { finding: FindingState }) {
 
   return (
     <div className="fade-in mt-2.5 space-y-3 text-[12.5px] leading-relaxed text-ink-2">
-      {f.status === "failed" && <p>Jev did not return a usable decision, so the prototype has not made one. The manuscript is unchanged.</p>}
+      {f.status === "failed" && <p>OpenJEV did not return a usable decision, so the prototype has not made one. The manuscript is unchanged.</p>}
       {f.status === "stale" && <p>{f.note ?? "The passage changed after this decision."} The previous decision is no longer applied.</p>}
 
       {d && o && (
         <>
           <div className={`rounded-[5px] px-2.5 py-1.5 text-[11.5px] ${sample ? "bg-amber-wash text-amber" : "bg-olive-pale/70 text-olive-dark"}`}>
             {sample ? (
-              <>Sample decision · fixture values written for preview mode, not Jev output</>
+              <>Sample decision · fixture values written for preview mode, not OpenJEV output</>
             ) : (
               <>
-                Live Jev · <span className="tabular">{f.technical?.model ?? "jev"}</span>
+                Live OpenJEV · <span className="tabular">{f.technical?.model ?? "openjev"}</span>
                 {f.technical?.latencyMs !== undefined && <span className="tabular"> · {f.technical.latencyMs} ms</span>}
               </>
             )}
@@ -411,7 +411,7 @@ function WhyTreatment({ finding: f }: { finding: FindingState }) {
           </p>
           <div>
             <p className="text-ink">
-              {sample ? "Sample route" : "Jev proposed"}: <span className="font-medium">{ROUTE_LABEL[o.jevRoute]}</span>
+              {sample ? "Sample route" : "OpenJEV proposed"}: <span className="font-medium">{ROUTE_LABEL[o.openjevRoute]}</span>
               <span className="tabular text-ink-2"> · confidence {fmt(d.routeConfidence)}</span>
             </p>
             <div className="mt-2 space-y-1">
@@ -476,7 +476,7 @@ function WhyTreatment({ finding: f }: { finding: FindingState }) {
             <pre className="quiet-scroll mt-1.5 max-h-72 overflow-auto rounded-[5px] border border-line-soft bg-ivory/70 p-2.5 font-mono text-[10.5px] leading-snug text-ink-2">
               {JSON.stringify(
                 sample
-                  ? { source: "sample fixture (not Jev output)", decision: d }
+                  ? { source: "sample fixture (not OpenJEV output)", decision: d }
                   : { error: f.error, requestId: f.technical?.requestId ?? f.error?.requestId, usage: f.technical?.usage, request: f.technical?.request, response: f.technical?.response },
                 null,
                 2,

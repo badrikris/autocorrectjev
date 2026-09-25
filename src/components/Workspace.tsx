@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { JevStatusBody } from "@/lib/jev/types";
+import type { OpenJevStatusBody } from "@/lib/openjev/types";
 import { sectionTitle, SECTIONS } from "@/lib/manuscript";
 import { candidateOf, createReviewState, isAutoApplied, needsEditor, reviewReducer, sortedFindings, summarise, type FindingState } from "@/lib/review";
 import { QueryDialog, SettingsDialog } from "./Dialogs";
@@ -9,12 +9,12 @@ import type { CardActions } from "./FindingCard";
 import { Manuscript } from "./Manuscript";
 import { OutlineRail } from "./OutlineRail";
 import { ReviewPanel, type Filter } from "./ReviewPanel";
-import { TopBar, type JevIndicator } from "./TopBar";
+import { TopBar, type OpenJevIndicator } from "./TopBar";
 import { useEvaluator } from "./useEvaluator";
 
 export function Workspace() {
   const [state, dispatch] = useReducer(reviewReducer, undefined, () => createReviewState());
-  const [jevStatus, setJevStatus] = useState<JevStatusBody | null>(null);
+  const [openjevStatus, setOpenJevStatus] = useState<OpenJevStatusBody | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -37,10 +37,10 @@ export function Workspace() {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/jev/status", { cache: "no-store" })
-      .then((r) => r.json() as Promise<JevStatusBody>)
-      .then((s) => alive && setJevStatus(s))
-      .catch(() => alive && setJevStatus({ configured: false, model: "jev-latest" }));
+    fetch("/api/openjev/status", { cache: "no-store" })
+      .then((r) => r.json() as Promise<OpenJevStatusBody>)
+      .then((s) => alive && setOpenJevStatus(s))
+      .catch(() => alive && setOpenJevStatus({ configured: false, model: "openjev" }));
     return () => {
       alive = false;
     };
@@ -53,7 +53,7 @@ export function Workspace() {
     if (!root) return;
     const inView = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
-    // Presentation only: scrolling never triggers Jev requests.
+    // Presentation only: scrolling never triggers OpenJEV requests.
     const recompute = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -273,8 +273,8 @@ export function Workspace() {
     dispatch({ type: "queue", ids: Object.keys(state.findings) });
   };
   const onStart = () => {
-    if (!jevStatus) return;
-    if (jevStatus.configured) startLive();
+    if (!openjevStatus) return;
+    if (openjevStatus.configured) startLive();
     else setStartPrompt(true);
   };
   const reset = () => {
@@ -288,17 +288,17 @@ export function Workspace() {
     mainRef.current?.scrollTo({ top: 0 });
   };
 
-  const indicator: JevIndicator = useMemo(() => {
+  const indicator: OpenJevIndicator = useMemo(() => {
     if (state.mode === "preview") return { kind: "preview" };
-    if (!jevStatus) return { kind: "checking" };
-    if (!jevStatus.configured) return { kind: "not_configured" };
-    if (state.jevConnected) return { kind: "connected" };
+    if (!openjevStatus) return { kind: "checking" };
+    if (!openjevStatus.configured) return { kind: "not_configured" };
+    if (state.openjevConnected) return { kind: "connected" };
     if (state.lastLiveError) {
       const k = state.lastLiveError.kind;
-      return { kind: "error", text: k === "auth" ? "Jev key rejected" : k === "timeout" || k === "network" || k === "server" || k === "rate_limited" ? "Jev unavailable" : "Jev error" };
+      return { kind: "error", text: k === "auth" ? "OpenJEV key rejected" : k === "timeout" || k === "network" || k === "server" || k === "rate_limited" ? "OpenJEV unavailable" : "OpenJEV error" };
     }
     return { kind: "configured" };
-  }, [state.mode, state.jevConnected, state.lastLiveError, jevStatus]);
+  }, [state.mode, state.openjevConnected, state.lastLiveError, openjevStatus]);
 
   const queryFinding = queryId ? state.findings[queryId] : null;
 
@@ -309,16 +309,16 @@ export function Workspace() {
         started={state.mode !== "idle"}
         progress={{ done: summary.evaluated + summary.failed, total: summary.total, pending: summary.pending, needsYou: summary.needsYou, auto: summary.autoHandled, complete: summary.complete }}
         onStart={onStart}
-        canStart={jevStatus !== null}
+        canStart={openjevStatus !== null}
         onReset={reset}
         onSettings={() => setSettingsOpen(true)}
         startPrompt={
           startPrompt && (
-            <div className="fade-in absolute right-0 top-11 z-30 w-[320px] rounded-md border border-line bg-paper p-4 shadow-[var(--shadow-pop)]" role="dialog" aria-label="Jev is not configured">
-              <p className="text-[13px] font-medium text-ink">Jev isn’t configured</p>
+            <div className="fade-in absolute right-0 top-11 z-30 w-[320px] rounded-md border border-line bg-paper p-4 shadow-[var(--shadow-pop)]" role="dialog" aria-label="OpenJEV is not configured">
+              <p className="text-[13px] font-medium text-ink">OpenJEV isn’t configured</p>
               <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2">
-                Add <code className="rounded bg-ivory px-1 text-[11.5px]">TYPESAFE_API_KEY</code> to <code className="rounded bg-ivory px-1 text-[11.5px]">.env.local</code> and restart the server
-                for live Jev decisions. Or explore with fixture data, clearly labelled as samples.
+                Add <code className="rounded bg-ivory px-1 text-[11.5px]">OPENJEV_API_KEY</code> to <code className="rounded bg-ivory px-1 text-[11.5px]">.env.local</code> and restart the server
+                for live OpenJEV decisions. Or explore with fixture data, clearly labelled as samples.
               </p>
               <div className="mt-3.5 flex justify-end gap-2">
                 <button type="button" onClick={() => setStartPrompt(false)} className="h-8 rounded-md px-3 text-[12.5px] text-ink-2 hover:bg-ivory hover:text-ink">
@@ -364,7 +364,7 @@ export function Workspace() {
           actions={actions}
           onInteracting={onInteracting}
           onStart={onStart}
-          canStart={jevStatus !== null}
+          canStart={openjevStatus !== null}
           onPointerInside={setPointerInPanel}
           onRetryFailed={() => dispatch({ type: "queue", ids: all.filter((f) => f.status === "failed").map((f) => f.id) })}
         />
@@ -381,8 +381,8 @@ export function Workspace() {
       {settingsOpen && (
         <SettingsDialog
           onClose={() => setSettingsOpen(false)}
-          configured={jevStatus?.configured ?? null}
-          model={jevStatus?.model ?? "jev-latest"}
+          configured={openjevStatus?.configured ?? null}
+          model={openjevStatus?.model ?? "openjev"}
           mode={state.mode}
           onPreview={startPreview}
         />

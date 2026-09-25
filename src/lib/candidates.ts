@@ -2,9 +2,9 @@
  * Prepared candidate findings.
  *
  * These are intentionally prepared (not generated): the prototype demonstrates
- * Jev's judgment about each proposed edit and the editor's review experience,
+ * OpenJEV's judgment about each proposed edit and the editor's review experience,
  * not a grammar-detection engine. Nothing here says how a candidate should be
- * routed — that decision comes from Jev plus the routing policy.
+ * routed — that decision comes from OpenJEV plus the routing policy.
  */
 
 export type CandidateCategory =
@@ -36,11 +36,11 @@ export interface Candidate {
   category: CandidateCategory;
   /** Short editorial label shown on the card. */
   label: string;
-  /** Prepared editorial explanation (not written by Jev). */
+  /** Prepared editorial explanation (not written by OpenJEV). */
   explanation: string;
   /** Optional prepared author-query draft. */
   authorQuery?: string;
-  /** Other blocks worth sending to Jev as context (e.g. a figure quoted elsewhere). */
+  /** Other blocks worth sending to OpenJEV as context (e.g. a figure quoted elsewhere). */
   relatedBlocks?: string[];
 }
 

@@ -235,7 +235,7 @@ function BlockEditor({
         <button type="button" onClick={onCancel} className="h-8 rounded-md px-3 text-[13px] text-ink-2 transition hover:bg-ivory hover:text-ink">
           Cancel
         </button>
-        <span className="ml-auto text-[11.5px] text-ink-3">Saving marks Jev decisions in this paragraph out of date.</span>
+        <span className="ml-auto text-[11.5px] text-ink-3">Saving marks OpenJEV decisions in this paragraph out of date.</span>
       </div>
     </div>
   );

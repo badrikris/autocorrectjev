@@ -13,7 +13,7 @@ const sans = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swa
 
 export const metadata: Metadata = {
   title: "Edit — Copyediting, with judgment",
-  description: "Scholarly copyediting prototype. Prepared suggestions · Live Jev decisions.",
+  description: "Scholarly copyediting prototype. Prepared suggestions · Live OpenJEV decisions.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

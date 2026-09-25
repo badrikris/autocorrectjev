@@ -11,6 +11,7 @@ import { OutlineRail } from "./OutlineRail";
 import { ReviewPanel, type Filter } from "./ReviewPanel";
 import { TopBar, type OpenJevIndicator } from "./TopBar";
 import { useEvaluator } from "./useEvaluator";
+import { usePanelFollow } from "./usePanelFollow";
 
 export function Workspace() {
   const [state, dispatch] = useReducer(reviewReducer, undefined, () => createReviewState());
@@ -28,8 +29,8 @@ export function Workspace() {
   const visibleRef = useRef<string[]>([]);
   const [visibleBlocks, setVisibleBlocks] = useState<string[]>([]);
   const [readingBlock, setReadingBlock] = useState<string | null>(null);
-  const [shownReading, setShownReading] = useState<string | null>(null);
-  const [shownBlocks, setShownBlocks] = useState<string[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [pointerInPanel, setPointerInPanel] = useState(false);
   const [interactingCards, setInteractingCards] = useState<Set<string>>(new Set());
 
@@ -89,14 +90,9 @@ export function Workspace() {
     };
   }, [docOrder, editing]);
 
-  // Don't swap cards out from under the editor while they're working in the panel.
+  // The panel follows the manuscript, except while the editor is working in it.
   const interacting = pointerInPanel || interactingCards.size > 0 || queryId !== null;
-  useEffect(() => {
-    if (!interacting) {
-      setShownBlocks(visibleBlocks);
-      setShownReading(readingBlock);
-    }
-  }, [visibleBlocks, readingBlock, interacting]);
+  const follow = usePanelFollow({ mainRef, listRef, paused: interacting, onActive: setActiveId });
 
   const onInteracting = useCallback((id: string, active: boolean) => {
     setInteractingCards((prev) => {
@@ -111,7 +107,7 @@ export function Workspace() {
   const blockOfFinding = useCallback((f: FindingState) => f.anchor?.blockId ?? candidateOf(f.id).blockId, []);
 
   const passageLabel = useMemo(() => {
-    const first = shownReading ?? "abs-1";
+    const first = readingBlock ?? "abs-1";
     const block = state.doc.blocks[first];
     let sub: string | null = null;
     const idx = state.doc.order.indexOf(first);
@@ -124,18 +120,24 @@ export function Workspace() {
       }
     }
     return { section: sectionTitle(block.sectionId), sub, sectionId: block.sectionId };
-  }, [shownReading, state.doc]);
+  }, [readingBlock, state.doc]);
 
   const currentSection = readingBlock ? state.doc.blocks[readingBlock].sectionId : "abstract";
 
   const all = useMemo(() => sortedFindings(state), [state]);
   const summary = useMemo(() => summarise(state), [state]);
 
-  const scopeFindings = useMemo(() => {
-    if (showAll) return all;
-    const set = new Set(shownBlocks);
-    return all.filter((f) => set.has(blockOfFinding(f)) || f.id === selectedId);
-  }, [all, showAll, shownBlocks, selectedId, blockOfFinding]);
+  // Findings in the passage being read stay in focus; the rest fade back.
+  const relevantIds = useMemo(() => {
+    const set = new Set(visibleBlocks);
+    return new Set(all.filter((f) => set.has(blockOfFinding(f)) || f.id === selectedId).map((f) => f.id));
+  }, [all, visibleBlocks, selectedId, blockOfFinding]);
+
+  // Re-align after the list changes shape (new results, filter, expanded card).
+  useEffect(() => {
+    const t = setTimeout(() => follow.sync(), 60);
+    return () => clearTimeout(t);
+  }, [state.findings, filter, follow]);
 
   const findingsByBlock = useMemo(() => {
     const map: Record<string, FindingState[]> = {};
@@ -202,11 +204,10 @@ export function Workspace() {
       const f = state.findings[id];
       if (filter === "auto" && !isAutoApplied(f)) setFilter("all");
       if (filter === "needs" && !needsEditor(f)) setFilter("all");
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => document.getElementById(`card-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" })),
-      );
+      // Glide the card to sit beside the highlight that was clicked.
+      requestAnimationFrame(() => requestAnimationFrame(() => follow.alignCard(id)));
     },
-    [state.findings, filter],
+    [state.findings, filter, follow],
   );
 
   const navigateSection = useCallback((sectionId: string) => {
@@ -341,6 +342,7 @@ export function Workspace() {
             doc={state.doc}
             findingsByBlock={findingsByBlock}
             selectedId={selectedId}
+            activeId={state.mode === "idle" ? null : activeId}
             flashId={flashId}
             editing={editing}
             onSelect={selectFromManuscript}
@@ -353,7 +355,10 @@ export function Workspace() {
         <ReviewPanel
           state={state}
           summary={summary}
-          scopeFindings={scopeFindings}
+          scopeFindings={all}
+          relevantIds={relevantIds}
+          activeId={activeId}
+          listRef={listRef}
           showAll={showAll}
           onToggleShowAll={() => setShowAll((v) => !v)}
           filter={filter}

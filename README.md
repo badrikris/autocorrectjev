@@ -98,6 +98,16 @@ Each card's *Why this treatment?* shows:
 
 *Technical details* shows the raw request and response.
 
+### Reading and the review panel
+
+As you scroll, the panel lists every finding in manuscript order and follows your reading position:
+
+- **The finding nearest your reading line becomes active.** Its card glides up to sit level with its highlight in the text, and both get a quiet olive emphasis.
+- **Findings outside the current passage fade back**, but stay readable and clickable. Hovering one brings it back into focus. Tick *Show all findings* to turn fading off.
+- **The motion follows a critically damped spring** (`src/components/usePanelFollow.ts`), the same physics behind Apple's system animations. It follows your scrolling continuously and moves smoothly to the next finding without overshooting. Fades, expanding cards and label changes use Apple-style easing curves.
+- **While you work in the panel, following pauses.** Hovering it, scrolling it or editing a suggestion there leaves it where you put it. With *Reduce motion* turned on, it jumps instead of animating.
+- **Scrolling only changes what is shown.** It never sends a request.
+
 ### Edit reliability
 
 - Blocks and findings have stable IDs. Blocks carry a `revision`, and an `editEpoch` that increases only when a person rewrites the passage.

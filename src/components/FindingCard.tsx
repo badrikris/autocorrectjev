@@ -25,13 +25,17 @@ interface Props {
   candidate: Candidate;
   blockText: string | null;
   selected: boolean;
+  /** Outside the passage being read: fade back. */
+  dim?: boolean;
+  /** Nearest the reading line: gently emphasised. */
+  active?: boolean;
   onToggle: (id: string) => void;
   actions: CardActions;
   onInteracting: (id: string, active: boolean) => void;
   muted?: boolean;
 }
 
-export function FindingCard({ finding: f, candidate: c, blockText, selected, onToggle, actions, onInteracting, muted }: Props) {
+export function FindingCard({ finding: f, candidate: c, blockText, selected, dim = false, active = false, onToggle, actions, onInteracting, muted }: Props) {
   const status = statusLabel(f);
   const treatment = treatmentOf(f);
   const [editText, setEditText] = useState<string | null>(null);
@@ -49,6 +53,24 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
     }
   }, [selected]);
 
+  // Expand/collapse: keep the body mounted while it animates closed.
+  const [expanded, setExpanded] = useState(selected);
+  const [renderBody, setRenderBody] = useState(selected);
+  useEffect(() => {
+    if (selected) {
+      setRenderBody(true);
+      let inner = 0;
+      const outer = requestAnimationFrame(() => (inner = requestAnimationFrame(() => setExpanded(true))));
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(inner);
+      };
+    }
+    setExpanded(false);
+    const t = setTimeout(() => setRenderBody(false), 520);
+    return () => clearTimeout(t);
+  }, [selected]);
+
   // What text should the before/after compare?
   const shownReplacement = f.appliedText ?? c.replacement;
   const anchorText = f.anchor && blockText !== null ? blockText.slice(f.anchor.start, f.anchor.end) : null;
@@ -59,13 +81,21 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
   return (
     <div
       id={`card-${f.id}`}
-      className={`card-enter group/card relative rounded-md border transition-colors ${
+      data-dim={dim || undefined}
+      className={`card-enter card-motion group/card relative rounded-md border ${
         selected
           ? "border-olive-soft/80 bg-olive-wash shadow-[var(--shadow-hair)]"
-          : "border-line-soft bg-paper hover:border-line"
-      }`}
+          : active
+            ? "border-olive-soft/60 bg-paper shadow-[var(--shadow-lift)]"
+            : "border-line-soft bg-paper hover:border-line"
+      } ${dim && !selected ? "card-dim" : ""}`}
     >
-      {selected && <span className="absolute -left-px bottom-2 top-2 w-[2px] rounded-full bg-olive" aria-hidden />}
+      <span
+        className={`absolute -left-px bottom-2 top-2 w-[2px] origin-center rounded-full bg-olive transition-[opacity,transform] duration-500 ease-apple ${
+          selected || active ? "scale-y-100 opacity-100" : "scale-y-50 opacity-0"
+        }`}
+        aria-hidden
+      />
       <button
         type="button"
         onClick={() => onToggle(f.id)}
@@ -80,15 +110,16 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
             {status.text}
           </span>
         </div>
-        {!selected && (
+        <Collapse open={!expanded}>
           <div className={`mt-1 truncate pl-3.5 font-serif text-[14.5px] leading-snug ${resolvedMuted ? "text-ink-3" : "text-ink-2"}`}>
             <CompactPreview original={c.original} replacement={shownReplacement} />
           </div>
-        )}
+        </Collapse>
       </button>
 
-      {selected && (
-        <div className="fade-in px-3.5 pb-3.5">
+      {renderBody && (
+        <Collapse open={expanded}>
+        <div className="px-3.5 pb-3.5">
           {shownReplacement !== null ? (
             <DiffRows
               before={ctx.before}
@@ -162,6 +193,7 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
             </div>
           )}
         </div>
+        </Collapse>
       )}
     </div>
   );
@@ -263,6 +295,15 @@ export function FindingCard({ finding: f, candidate: c, blockText, selected, onT
     }
     return null;
   }
+}
+
+/** Height + opacity transition that feels native: rows animate from 0fr to 1fr. */
+function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div className="collapse-motion grid" style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }} aria-hidden={!open || undefined}>
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
 }
 
 function Btn({ children, onClick, icon, kind = "ghost", disabled }: { children: ReactNode; onClick: () => void; icon?: ReactNode; kind?: "primary" | "ghost" | "quiet"; disabled?: boolean }) {

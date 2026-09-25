@@ -32,6 +32,11 @@
 
   --shadow-hair: 0 1px 0 rgba(37, 37, 31, 0.03), 0 1px 3px rgba(37, 37, 31, 0.04);
   --shadow-pop: 0 1px 2px rgba(37, 37, 31, 0.06), 0 8px 24px -8px rgba(37, 37, 31, 0.14);
+  --shadow-lift: 0 1px 2px rgba(57, 67, 31, 0.05), 0 6px 18px -10px rgba(57, 67, 31, 0.22);
+
+  /* Apple-style curves: a soft "ease-out-expo" for UI state, and a gentle ease for fades. */
+  --ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-apple-soft: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 html,
@@ -208,6 +213,69 @@ textarea:focus-visible {
   font-size: 0.72em;
   color: var(--color-ink-3);
   letter-spacing: 0.08em;
+}
+
+/* ---------- Panel motion ---------- */
+.card-motion {
+  transition:
+    opacity 650ms var(--ease-apple),
+    filter 650ms var(--ease-apple),
+    transform 650ms var(--ease-apple),
+    background-color 350ms var(--ease-apple-soft),
+    border-color 350ms var(--ease-apple-soft),
+    box-shadow 450ms var(--ease-apple);
+}
+/* Out of the current passage: recede, but stay legible and reachable. */
+.card-dim {
+  opacity: 0.4;
+  filter: saturate(0.35);
+  transform: scale(0.985);
+}
+.card-dim:hover,
+.card-dim:focus-within {
+  opacity: 0.85;
+  filter: none;
+  transform: none;
+}
+/* Cards slip softly out of view at the list edges instead of being cut off. */
+.list-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 32px), transparent 100%);
+}
+.collapse-motion {
+  transition:
+    grid-template-rows 480ms var(--ease-apple),
+    opacity 380ms var(--ease-apple-soft);
+}
+.label-swap {
+  animation: label-swap 420ms var(--ease-apple);
+}
+@keyframes label-swap {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+/* Manuscript counterpart of the active card: a quiet olive underline. */
+.hl-active {
+  box-shadow: 0 2px 0 -0.5px rgba(102, 115, 58, 0.55);
+}
+.hl-auto.hl-active,
+.hl-kept.hl-active,
+.hl-applied.hl-active {
+  background: #e6e9d8;
+}
+.hl {
+  transition:
+    background-color 450ms var(--ease-apple),
+    box-shadow 450ms var(--ease-apple),
+    text-decoration-color 450ms var(--ease-apple);
 }
 
 /* Gentle activity pulse for "Evaluating" */

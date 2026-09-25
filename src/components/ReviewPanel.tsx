@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { candidateOf, isAutoApplied, isSuppressed, needsEditor, type FindingState, type ReviewState, type ReviewSummary } from "@/lib/review";
 import { SECTIONS } from "@/lib/manuscript";
 import { FindingCard, type CardActions } from "./FindingCard";
@@ -12,6 +12,11 @@ interface Props {
   state: ReviewState;
   summary: ReviewSummary;
   scopeFindings: FindingState[];
+  /** Findings in the passage being read; everything else fades back. */
+  relevantIds: Set<string>;
+  /** The finding nearest the reading line. */
+  activeId: string | null;
+  listRef: RefObject<HTMLDivElement | null>;
   showAll: boolean;
   onToggleShowAll: () => void;
   filter: Filter;
@@ -55,7 +60,7 @@ export function ReviewPanel(p: Props) {
             Show all findings
           </label>
         </div>
-        <p className="mt-0.5 truncate text-[12.5px] text-ink-2">
+        <p key={p.showAll ? "all" : `${p.passageLabel.section}-${p.passageLabel.sub}`} className="label-swap mt-0.5 truncate text-[12.5px] text-ink-2">
           {p.showAll ? "Whole manuscript, in manuscript order" : (
             <>
               {p.passageLabel.section}
@@ -121,7 +126,7 @@ export function ReviewPanel(p: Props) {
         </div>
       )}
 
-      <div className="quiet-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4" id="review-list">
+      <div ref={p.listRef} className="quiet-scroll list-fade min-h-0 flex-1 overflow-y-auto px-5 pb-[45vh] pt-4" id="review-list">
         {!started ? (
           <IntroState onStart={p.onStart} canStart={p.canStart} total={summary.total} />
         ) : (
@@ -147,16 +152,26 @@ export function ReviewPanel(p: Props) {
               <div className="space-y-2">
                 {filtered.map((f, i) => {
                   const block = f.anchor ? state.doc.blocks[f.anchor.blockId] : null;
-                  const sectionHeader =
-                    p.showAll && (i === 0 || sectionOf(filtered[i - 1], state) !== sectionOf(f, state)) ? SECTIONS.find((s) => s.id === sectionOf(f, state))?.title : null;
+                  const sectionId = sectionOf(f, state);
+                  const sectionHeader = i === 0 || sectionOf(filtered[i - 1], state) !== sectionId ? SECTIONS.find((s) => s.id === sectionId)?.title : null;
+                  const dim = !p.showAll && !p.relevantIds.has(f.id);
+                  const sectionDim = !p.showAll && !filtered.some((g) => sectionOf(g, state) === sectionId && p.relevantIds.has(g.id));
                   return (
                     <div key={f.id}>
-                      {sectionHeader && <p className={`mb-1.5 text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-3 ${i === 0 ? "" : "mt-4"}`}>{sectionHeader}</p>}
+                      {sectionHeader && (
+                        <p
+                          className={`mb-1.5 text-[10.5px] font-medium uppercase tracking-[0.12em] transition-[color,opacity] duration-700 ease-apple ${sectionDim ? "text-ink-3/60" : "text-olive-dark"} ${i === 0 ? "" : "mt-5"}`}
+                        >
+                          {sectionHeader}
+                        </p>
+                      )}
                       <FindingCard
                         finding={f}
                         candidate={candidateOf(f.id)}
                         blockText={block?.text ?? null}
                         selected={p.selectedId === f.id}
+                        dim={dim}
+                        active={p.activeId === f.id && !dim}
                         onToggle={p.onToggleCard}
                         actions={p.actions}
                         onInteracting={p.onInteracting}
@@ -253,9 +268,7 @@ function EmptyScope({ filter, showAll, anyInScope }: { filter: Filter; showAll: 
         : "Nothing in this passage needs you."
       : filter === "auto"
         ? "No automatic corrections here."
-        : showAll
-          ? "No findings."
-          : "No findings in this passage.";
+        : "No findings yet.";
   return (
     <div className="flex items-center gap-2 py-6 text-[12.5px] text-ink-3">
       <span className="h-px w-5 bg-line" />

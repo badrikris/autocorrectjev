@@ -11,6 +11,8 @@ interface ManuscriptProps {
   doc: DocState;
   findingsByBlock: Record<string, FindingState[]>;
   selectedId: string | null;
+  /** The finding nearest the reading line, mirrored in the panel. */
+  activeId: string | null;
   flashId: string | null;
   editing: { blockId: string; selectStart?: number; selectEnd?: number } | null;
   onSelect: (id: string) => void;
@@ -47,6 +49,7 @@ export function Manuscript(props: ManuscriptProps) {
             block={doc.blocks[id]}
             findings={findingsByBlock[id]}
             selectedId={props.selectedId}
+            activeId={props.activeId}
             flashId={props.flashId}
             editing={props.editing?.blockId === id ? props.editing : null}
             onSelect={props.onSelect}
@@ -68,6 +71,7 @@ interface BlockViewProps {
   block: Block;
   findings: FindingState[] | undefined;
   selectedId: string | null;
+  activeId: string | null;
   flashId: string | null;
   editing: { blockId: string; selectStart?: number; selectEnd?: number } | null;
   onSelect: (id: string) => void;
@@ -76,7 +80,7 @@ interface BlockViewProps {
   onCancelEdit: () => void;
 }
 
-const BlockView = memo(function BlockView({ block, findings, selectedId, flashId, editing, onSelect, onStartEdit, onSaveEdit, onCancelEdit }: BlockViewProps) {
+const BlockView = memo(function BlockView({ block, findings, selectedId, activeId, flashId, editing, onSelect, onStartEdit, onSaveEdit, onCancelEdit }: BlockViewProps) {
   const marks = (findings ?? [])
     .map((f) => ({ f, kind: highlightKind(f) }))
     .filter((m) => m.kind !== null && m.f.anchor)
@@ -101,7 +105,7 @@ const BlockView = memo(function BlockView({ block, findings, selectedId, flashId
           e.stopPropagation();
           onSelect(f.id);
         }}
-        className={`hl hl-${kind} ${selected ? "hl-selected" : ""} ${flashId === f.id ? "hl-flash" : ""}`}
+        className={`hl hl-${kind} ${selected ? "hl-selected" : f.id === activeId ? "hl-active" : ""} ${flashId === f.id ? "hl-flash" : ""}`}
       >
         {segment.length > 0 && segment.trim() === "" ? <span className="whitespace-pre">{segment}</span> : segment}
       </span>,
